@@ -448,7 +448,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   var LANES = ['Ideas', 'Backlog', 'Blocked', 'Ready', 'In progress', 'Done'];
   var TABS = [
     ['board', 'Task board'], ['needs', 'Needs you'], ['decided', 'Decided for you'], ['activity', 'Activity'], ['agents', 'Agents'],
-    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['settings', 'Settings']
+    ['creds', 'Credentials'], ['handoff', 'Handoff'], ['settings', 'Rules']
   ];
   /* the steps across the top, and the screens each one covers */
   var STEPS = [['Welcome', ['welcome']], ['Logins', ['login1', 'login2']], ['Agents', ['agents']], ['First task', ['task']]];
@@ -644,7 +644,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   }
 
   function loginRowHtml(l) {
-    return '<li class="lv-ob-item"><span class="lv-ob-item-text"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login.</span></span>' +
+    return '<li class="lv-ob-item"><span class="lv-ob-item-text"><b>' + esc(l.label) + '</b><span class="lv-muted">Login</span></span>' +
       '<span class="lv-chip lv-chip--done">Added</span></li>';
   }
   function tilesHtml() {
@@ -689,7 +689,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
         if (idx === 1) {
           out += '<div><button type="button" class="lv-ob-link lv-ob-link--quiet" data-a="oneOnly" data-k="one-only" aria-expanded="' + s.oneOnly + '">I only have one subscription</button></div>';
           if (s.oneOnly) {
-            out += '<div class="lv-ob-note lv-ob-note--wait"><p>You can continue with one. Finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings.</p>' +
+            out += '<div class="lv-ob-note lv-ob-note--wait"><p>You can continue with one. Finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Rules.</p>' +
               '<button type="button" class="lv-btn" data-a="withOne" data-k="with-one">Continue with one</button></div>';
           }
         }
@@ -714,7 +714,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
     var note = '';
     var providers = on.map(function (l) { return l.provider; }).filter(function (p, i, a) { return a.indexOf(p) === i; });
     if (on.length && providers.length < 2) {
-      note = 'With one provider, finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Settings.';
+      note = 'With one provider, finished work will wait in Needs you until a second provider is added, or until you turn the review rule off in Rules.';
     } else if (on.length && on.some(function (l) { return l.provider === 'Gemini'; }) && on.filter(function (l) { return l.provider !== 'Gemini'; }).length === 1) {
       var other = on.filter(function (l) { return l.provider !== 'Gemini'; })[0];
       note = 'Gemini does not review yet. ' + other.label + ' reviews what Gemini builds, and what ' + other.label + ' builds will wait for another reviewer.';
@@ -828,7 +828,7 @@ body { background: #E9EAEE; color: #1B1D22; font: 13px/1.4 -apple-system, BlinkM
   function credsPageHtml() {
     if (!s.logins.length) { return emptyPage('No logins yet. Add one so an agent can run on it.'); }
     return '<div class="lv-page"><div class="lv-page-head"><div class="lv-muted">The order they take over in is set on Handoff.</div></div><ul class="lv-list">' + s.logins.map(function (l) {
-      return '<li class="lv-cred"><div class="lv-cred-top"><div class="lv-cred-name"><b>' + esc(l.label) + '</b><span class="lv-muted">Subscription login</span></div></div>' +
+      return '<li class="lv-cred"><div class="lv-cred-top"><div class="lv-cred-name"><b>' + esc(l.label) + '</b><span class="lv-muted">Login</span></div></div>' +
         '<div class="lv-cred-state"><span class="lv-chip lv-chip--info">Ready</span><span class="lv-muted">Signed in and answering.</span></div></li>';
     }).join('') + '</ul></div>';
   }

@@ -40,7 +40,7 @@ enum CredentialsCopy: OwnerFacingCopy {
         case .empty: "No logins yet. Add one so an agent can run on it."
         case .header: "The order they take over in is set on Handoff."
         case .addCredential: "Add credential"
-        case .kindLogin: "Subscription login"
+        case .kindLogin: "Login"
         case .kindToken: "API token"
         case .statusSignedOut: "Signed out"
         case .usageReady: "Signed in and answering."

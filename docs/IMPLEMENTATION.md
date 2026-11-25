@@ -55,9 +55,9 @@ the run. The run ends when the build is done or the owner stops it.
 | | |
 | --- | --- |
 | **As of** | 2026-11-24 |
-| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, and the Imaginarium gallery |
+| **On `main`** | The rules, the PRD with the gate settled, the design reference, the provider-terms record, the skeleton, the contract (milestone 1), the Core loop (milestone 2), Handoff (milestone 3), Rule checks (milestone 4), Questions and approvals (milestone 5), Credentials (milestone 6), the General role and landing prompt ([#20](https://github.com/yuric/leverage/pull/20)), the General mode eval runs and expanded specific-details budget ([#21](https://github.com/yuric/leverage/pull/21)), and the [Imaginarium prompt gallery proposal](imaginarium/PRD.md) ([#22](https://github.com/yuric/leverage/pull/22)), App round 2, the Imaginarium gallery, and Subscription step 1 |
 | **Local deployment record** | Verification record dated 2026-11-24: the owner’s Mac was running the app and API at `2573be4`; the event-log audit passed for 1 workspace and 10 events. The earlier verified deployment at `300db09` remains the historical record. |
-| **Next** | Settings step 1 and the flaky approval self-test fixes are approved and underway. Future billed plans follow the remaining product decisions. |
+| **Next** | Settle the [subscription decisions](PRD.md#open-decisions) before building the billing service. |
 
 ### Recent merges
 
@@ -70,11 +70,13 @@ the run. The run ends when the build is done or the owner stops it.
 - App round 2. [#35](https://github.com/yuric/leverage/pull/35)
 - Imaginarium gallery. [#36](https://github.com/yuric/leverage/pull/36)
 - Markdown lint workflow update. [#37](https://github.com/yuric/leverage/pull/37)
+- Approval secret scan self-test fix. [#38](https://github.com/yuric/leverage/pull/38)
+- Approval field decision and deployment record. [#39](https://github.com/yuric/leverage/pull/39)
+- Subscription step 1: Rules, appearance settings and Login copy. [#40](https://github.com/yuric/leverage/pull/40)
 
 ### In flight
 
-- Settings step 1 is approved and underway on `feat/settings-appearance-rules`.
-- The flaky approval self-test fixes are approved and underway on `fix/approval-self-test-race`.
+None.
 
 ### General role and landing prompt on `main`
 
@@ -984,6 +986,14 @@ records the changes. The owner approved these choices for the round.
 
 Native Codex and Grok have no effort drop-down in this round. UX-15
 records the documentation checked for each tool in the contract.
+
+### Subscription step 1
+
+FR-005, FR-006 and FR-025 cover the Rules tab, the appearance controls
+under Leverage > Settings (⌘ ,), and the Login label. The owner chose
+Same as this Mac as the default. This step uses the existing local app
+and its macOS preferences. The account menu and billing follow the
+[remaining subscription steps](PRD.md#build-order-for-subscription).
 
 ## What the Rule checks milestone proves, and how far
 
@@ -2489,7 +2499,7 @@ run is also listed here until the owner has read it.
 
 | Item | What is waiting |
 | --- | --- |
-| The recovery time ceiling | The owner can set it in Settings > Workspace settings. The setting is empty. Handoff stays not called done until the owner sets it. The six scripted cases used a verification bar of 900 seconds. |
+| The recovery time ceiling | The owner can set it in Rules > Workspace settings. The setting is empty. Handoff stays not called done until the owner sets it. The six scripted cases used a verification bar of 900 seconds. |
 | Pull requests 3 to 7 | Merged on the owner's instruction before the run started; their AI-assistance boxes are unticked |
 | Pull requests 8, 9 and 10 | Merged in the delegated run after an adversarial review; their AI-assistance boxes are unticked. Pull request 9 lists the choices made for the owner in the PRD |
 | [ADR 0001](adr/0001-rails-api-postgresql-and-a-mac-client.md) | Records the owner's decisions; the owner has not read its text. Two points in it are the agent's: the directory names `api/` and `mac/`, and the helper written in Swift |

@@ -50,7 +50,8 @@ When a payment fails, the row, the page and Needs you all say so:
 
 ![Needs you with a Subscription item: Your subscription payment didn't go through, with Update payment method](needs-you.png)
 
-Settings, which holds the appearance only:
+The original appearance mockup shows the two fixed themes. The approved
+settings also offer Same as this Mac as the default.
 
 ![Settings with Appearance: Light and Dark](settings.png)
 

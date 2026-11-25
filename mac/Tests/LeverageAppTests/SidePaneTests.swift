@@ -9,14 +9,14 @@ import Testing
 @MainActor
 @Suite("SidePane")
 struct SidePaneTests {
-    @Test("the pane lists the tabs in order, with Settings last")
+    @Test("the pane lists the tabs in order, with Rules last")
     func tabsInOrder() {
         #expect(SidePane.tabs.map(\.place) == [
-            .board, .needsYou, .decided, .activity, .agents, .credentials, .handoff, .imaginarium, .settings,
+            .board, .needsYou, .decided, .activity, .agents, .credentials, .handoff, .imaginarium, .rules,
         ])
         #expect(SidePane.tabs.map(\.copy.text) == [
             "Task board", "Needs you", "Decided for you", "Activity", "Agents", "Credentials", "Handoff",
-            "Imaginarium", "Settings",
+            "Imaginarium", "Rules",
         ])
         #expect(Set(SidePane.tabs.map(\.symbol)).count == SidePane.tabs.count)
         #expect(SidePane.tabs.allSatisfy { !$0.symbol.isEmpty })
@@ -51,12 +51,12 @@ struct SidePaneTests {
         }
     }
 
-    @Test("showing Settings leaves a task's page and shows Settings")
-    func showsSettings() {
+    @Test("showing Rules leaves a task's page and shows Rules")
+    func showsRules() {
         let navigator = Navigator()
         navigator.open(task: UUID())
-        navigator.show(.settings)
-        #expect(navigator.place == .settings)
+        navigator.show(.rules)
+        #expect(navigator.place == .rules)
         #expect(navigator.openTaskID == nil)
     }
 

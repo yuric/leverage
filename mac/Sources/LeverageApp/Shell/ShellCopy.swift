@@ -7,7 +7,7 @@ import LeverageKit
 enum ShellCopy: OwnerFacingCopy {
     // The app and its window.
     case appName
-    case tabBoard, tabNeedsYou, tabDecided, tabActivity, tabAgents, tabCredentials, tabHandoff, tabImaginarium, tabSettings
+    case tabBoard, tabNeedsYou, tabDecided, tabActivity, tabAgents, tabCredentials, tabHandoff, tabImaginarium, tabRules
     case projects, allProjects, manageProjects, manageProjectsAccessibility
     case addTask, backToBoard, signOut
 
@@ -48,7 +48,7 @@ enum ShellCopy: OwnerFacingCopy {
         case .tabCredentials: "Credentials"
         case .tabHandoff: "Handoff"
         case .tabImaginarium: "Imaginarium"
-        case .tabSettings: "Settings"
+        case .tabRules: RulesCopy.title.text
         case .projects: ProjectsCopy.title.text
         case .allProjects: "All projects"
         case .manageProjects: "Manage"

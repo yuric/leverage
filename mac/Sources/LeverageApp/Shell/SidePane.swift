@@ -68,7 +68,7 @@ struct SidePane: View {
         Tab(place: .credentials, copy: .tabCredentials, symbol: "key"),
         Tab(place: .handoff, copy: .tabHandoff, symbol: "arrow.triangle.swap"),
         Tab(place: .imaginarium, copy: .tabImaginarium, symbol: "sparkles"),
-        Tab(place: .settings, copy: .tabSettings, symbol: "gearshape"),
+        Tab(place: .rules, copy: .tabRules, symbol: "checklist"),
     ]
 
     /// The tab the setup spotlight can light, if any.

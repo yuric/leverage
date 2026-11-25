@@ -322,7 +322,7 @@ struct CopyTests {
 
     @Test("the Rules sentences are the words RM-1 and RD-8 name")
     func rulesSentences() {
-        #expect(ShellCopy.tabSettings.text == "Settings")
+        #expect(ShellCopy.tabRules.text == "Rules")
         #expect(RulesCopy.title.text == "Rules")
         #expect(RulesCopy.scopeAllTasks.text == "Every task")
         // Review finding 26: the owner's words say "the agent that checks", never "checker".

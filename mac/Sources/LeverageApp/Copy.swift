@@ -27,6 +27,7 @@ enum CopyCatalogs {
         HandoffCopy.self,
         ImaginariumCopy.self,
         RulesCopy.self,
+        AppearanceSettingsCopy.self,
         DecidedCopy.self,
         ActivityCopy.self,
         ProjectsCopy.self,

@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct LeverageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @AppStorage(AppAppearance.preferenceKey) private var appearance = AppAppearance.system
     @State private var model = AppModel(
         runtime: Live.runtime(),
         makeOwnerAPI: { url, token in OwnerClient(baseURL: url, sessionToken: token) })
@@ -11,6 +12,7 @@ struct LeverageApp: App {
     var body: some Scene {
         Window(ShellCopy.appName.text, id: Self.windowID) {
             WindowRoot(model: model, delegate: delegate)
+                .preferredColorScheme(appearance.colorScheme)
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1040, height: 700)
@@ -25,6 +27,11 @@ struct LeverageApp: App {
                     .disabled(!model.isSignedIn)
                 Divider()
             }
+        }
+
+        Settings {
+            AppearanceSettingsView(selection: $appearance)
+                .preferredColorScheme(appearance.colorScheme)
         }
     }
 

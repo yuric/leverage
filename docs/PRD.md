@@ -795,7 +795,7 @@ The Leverage server runs on the owner's Mac. Stripe needs a secret key and sends
 
 | ID | Requirement |
 | --- | --- |
-| FR-005 | The Settings page has one section, Appearance, with two choices, Light and Dark, each shown as a small picture of the window. The choice applies at once, is kept on this Mac, and is the same after the app restarts. |
+| FR-005 | The Settings window has one section, Appearance, with three choices, Same as this Mac, Light and Dark, each shown as a small picture of the window. The default follows the Mac's appearance. The choice applies at once, is kept on this Mac, and is the same after the app restarts. |
 | FR-006 | The left pane has no Settings tab. A tab called Rules holds the rules and the workspace settings, and later Skills, Roles and Analytics (What the app shows in version 1). |
 
 ### Choosing a plan and paying: functional requirements
@@ -839,14 +839,14 @@ The Leverage server runs on the owner's Mac. Stripe needs a secret key and sends
 
 ### Acceptance criteria for Subscription
 
-- [ ] The row, the menu, Settings with Light and Dark, and the Rules tab work with no subscription service at all.
+- [ ] The row, the menu, the appearance settings, and the Rules tab work with no subscription service at all.
 - [ ] With Stripe in test mode, an owner with no subscription chooses Plus, pays in the browser with Stripe's test card, and the app shows "You're on Plus" without being restarted.
 - [ ] With Stripe's test card that fails on renewal, the row, the banner and one Needs you item appear, a run in progress goes on, and all three clear when the card is updated.
 - [ ] A search of the repository, the logs and the event log after those runs finds no card number, security code or Stripe secret key.
 
 ### Build order for Subscription
 
-1. The words (FR-025), the Rules tab (FR-006) and Settings with Light and Dark (FR-005).
+1. The words (FR-025), the Rules tab (FR-006) and Settings with Same as this Mac, Light and Dark (FR-005). The Settings window opens from the app menu (⌘ ,).
 2. The row and the menu with Sign out (FR-001 to FR-004). Until the service exists, the row's second line is left out.
 3. The ADR and the service (FR-021 to FR-024).
 4. Choosing and paying (FR-007 to FR-011), then the Subscription page (FR-012 to FR-016), then failed payments (FR-017 to FR-020).
@@ -961,7 +961,7 @@ One rule covers every word the owner reads: a word on an owner-facing screen tha
 | System health | One line on every screen: whether the timer sweep and the orchestrator are running, and whether the daily backup is late. |
 | Account menu | One row at the foot of the left pane, below the system health line, that opens Subscription, Settings and Sign out. See Subscription. |
 | Subscription | Choosing a plan, paying through Stripe, the plan, the payment method, receipts and cancelling. See Subscription. |
-| Settings | Appearance: Light or Dark. Opened from the account menu. |
+| Settings | Appearance: Same as this Mac, Light or Dark. Open it from the Leverage menu or with Command-comma. The account menu also opens it when that menu is added. |
 | Credentials | Its own tab in the left pane. Logins and API tokens grouped by provider, each account's limits and available resets, Refresh and Verify all, and the Add credential pop-up. Add credential for logins arrives in the Core loop milestone; a row's limit sentence and Sign in again in the Handoff milestone; API tokens and the rest in the Credentials milestone. |
 | Handoff | Its own tab in the left pane. The handoff rules as plain sentences, with no switch, and the one order of accounts, which the owner can reorder. The tab and the default order arrive in the Handoff milestone, reordering in the Credentials milestone. |
 
@@ -1154,5 +1154,5 @@ One gate stands before the contract. The contract is not started until these are
 | Changing plans in the middle of a month | Not decided: charge the difference at once, or from the next payment. | Change plan (FR-014). |
 | Support for subscribers | Not decided. MAINTENANCE.md says no support is owed under the MIT License. | A line in MAINTENANCE.md on what a subscriber's support is and how to reach it. |
 | The service's host, its privacy notice and sales tax | Not decided. Stripe Tax can work out tax, at a fee. | The ADR of FR-024. |
-| Following the Mac's appearance | Not decided. Today the app follows the Mac's light or dark setting; with only Light and Dark (FR-005) an owner loses that. Recommendation: a third choice, "Same as this Mac", as the default. | Settings (FR-005). |
+| Following the Mac's appearance | Decided: "Same as this Mac" is the default alongside Light and Dark. | Settings (FR-005). |
 | Stripe's details | To confirm in Stripe's documents when the ADR is written: that Link and Apple Pay work in subscription-mode Checkout, and that Apple Pay needs no domain set up for hosted Checkout. | Checkout (FR-009). |

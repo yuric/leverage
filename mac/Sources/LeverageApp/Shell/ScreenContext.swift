@@ -7,7 +7,7 @@ import Observation
 @Observable
 final class Navigator {
     enum Place: Equatable, Sendable {
-        case board, needsYou, decided, activity, agents, credentials, handoff, imaginarium, settings, projects
+        case board, needsYou, decided, activity, agents, credentials, handoff, imaginarium, rules, projects
     }
 
     private(set) var place: Place = .board

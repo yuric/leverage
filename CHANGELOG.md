@@ -221,6 +221,10 @@ once it makes its first release.
 
 ### Changed
 
+- The left pane's Rules tab holds rules and workspace settings. Leverage
+  Settings (⌘ ,) offers Same as this Mac, Light and Dark. Provider login
+  rows are labeled Login.
+
 - Add task and Edit contract use details in place of a separate task goal.
   The upgrade folds existing task goals into their details and updates an
   untouched "Every task needs specific details" rule to use the new wording.
