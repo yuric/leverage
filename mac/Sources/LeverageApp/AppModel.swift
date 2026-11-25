@@ -41,6 +41,7 @@ final class AppModel {
     @ObservationIgnored private var rawOwner: (any OwnerAPI)?
     @ObservationIgnored private var activeSessionGeneration: UUID?
     @ObservationIgnored private var helperStart: Task<Void, Never>?
+    @ObservationIgnored private var helperStop: Task<Void, Never>?
     @ObservationIgnored private var didLaunch = false
     @ObservationIgnored private var isQuitting = false
 
@@ -170,8 +171,12 @@ final class AppModel {
         signIn = nil
         phase = .ready
         // The helper starts after the owner signs in, and never blocks the window (PK-4).
+        guard !isQuitting else { return }
+        let stopping = helperStop
+        helperStop = nil
         let runtime = runtime
         helperStart = Task {
+            await stopping?.value
             _ = await runtime.helper.start(apiBaseURL: url, issuer: OwnerHelperTokenIssuer(owner: guarded))
         }
     }
@@ -193,14 +198,23 @@ final class AppModel {
         screens = nil
         rawOwner = nil
         try? runtime.sessions.clear()
+        stopHelper()
+        beginSignIn(mode: .signIn, api: makeOwnerAPI(url, nil), url: url)
+    }
+
+    /// A replacement session waits for this stop, as does a concurrent quit.
+    @discardableResult
+    private func stopHelper() -> Task<Void, Never> {
+        if let helperStop { return helperStop }
         let starting = helperStart
         helperStart = nil
         let runtime = runtime
-        Task {
+        let stopping = Task {
             await starting?.value
             await runtime.helper.stop()
         }
-        beginSignIn(mode: .signIn, api: makeOwnerAPI(url, nil), url: url)
+        helperStop = stopping
+        return stopping
     }
 
     // MARK: quitting
@@ -208,10 +222,8 @@ final class AppModel {
     /// Before the app quits: the events tail ends and the helper is asked to
     /// stop, which stops the runs (PK-8). The owner stays signed in.
     func prepareToQuit() async {
-        guard !isQuitting else { return }
         isQuitting = true
         screens?.feed.stop()
-        await helperStart?.value
-        await runtime.helper.stop()
+        await stopHelper().value
     }
 }
