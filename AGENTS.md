@@ -219,7 +219,7 @@ These run on every pull request and must pass. Run them locally before you
 report work as done:
 
 ```bash
-npx --yes markdownlint-cli2 "**/*.md"                      # Markdown lint
+npx --yes markdownlint-cli2@0.24.2 "**/*.md"               # Markdown lint, CI's version
 lychee --offline --include-fragments './**/*.md'     # links between files
 python3 scripts/check_prd_ids.py                     # PRD requirement IDs
 python3 scripts/check_rules.py                       # architecture rules

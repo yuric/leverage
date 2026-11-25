@@ -430,6 +430,19 @@ class ContinuousIntegrationTests(unittest.TestCase):
         guards = CI.read_text(encoding="utf-8").count("hashFiles(")
         self.assertEqual(guards, 0, f"{guards} steps of ci.yml are skipped when their script is missing")
 
+    def test_the_documented_npx_commands_name_one_exact_version(self):
+        """Review: the local Markdown lint ran whatever markdownlint-cli2
+        npm served that day, not the version CI's pinned action bundles."""
+        commands = {}
+        for name in ("AGENTS.md", "CONTRIBUTING.md"):
+            for package in re.findall(r"npx (?:--yes )?(\S+)", (ROOT / name).read_text(encoding="utf-8")):
+                commands.setdefault(package.split("@")[0], set()).add(package)
+        self.assertIn("markdownlint-cli2", commands)
+        for base, spelled in commands.items():
+            with self.subTest(package=base):
+                self.assertEqual(len(spelled), 1, f"the documents name different versions: {spelled}")
+                self.assertRegex(spelled.pop(), r"^[\w.-]+@\d+\.\d+\.\d+$", "an exact version")
+
     def test_dependabot_watches_every_pinned_manifest(self):
         """Review: only the actions had an updater, so the locked gems and
         the digest-pinned Ruby and PostgreSQL images went stale silently."""

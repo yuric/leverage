@@ -61,7 +61,7 @@ be merged:
 
 | Check | What it verifies | Run it locally |
 |-------|------------------|----------------|
-| Markdown lint | Markdown files follow the rules in `.markdownlint-cli2.yaml`. | `npx markdownlint-cli2 "**/*.md"` |
+| Markdown lint | Markdown files follow the rules in `.markdownlint-cli2.yaml`. | `npx --yes markdownlint-cli2@0.24.2 "**/*.md"` |
 | Internal links | Links between files in the repository resolve. | `lychee --offline --include-fragments './**/*.md'` |
 | PRD requirement IDs | IDs in `docs/PRD.md` are well formed and unique. | `python3 scripts/check_prd_ids.py` |
 | Rules compliance | The description answers every active [architecture rule](docs/ARCHITECTURE.md#rules), and the parts of the rules a script can check hold. | `python3 scripts/check_rules.py --base origin/main --body-file <file>` |
