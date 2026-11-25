@@ -279,6 +279,15 @@ struct InboxWatcherTests {
         #expect(rig.cursor.stored.value == 9)
     }
 
+    @Test("A workspace task limit settled before the read is announced without inventing a task")
+    func settledAgentTaskLimit() async {
+        let rig = makeRig(stored: 5)
+        let event = Fixtures.opened(seq: 9, item: UUID(), kind: .agentTasksAtLimit, task: nil)
+        await rig.watcher.handle(events: [event])
+        #expect(rig.notifier.posted.value.first?.title == "Agents have added 50 open tasks")
+        #expect(rig.notifier.posted.value.first?.body == "This was settled before you saw it.")
+    }
+
     @Test("an opened event whose item the read does return is announced once, as the item")
     func eventAndItem() async {
         let id = UUID()
