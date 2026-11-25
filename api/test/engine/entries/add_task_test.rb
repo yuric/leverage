@@ -87,6 +87,38 @@ class AddTaskTest < ActiveSupport::TestCase
     assert_equal 0, Task.where(workspace_id: @scenario.workspace_id).count
   end
 
+  test "an Imaginarium idea keeps its criteria and catalog source without logging their text or version" do
+    Leverage::Timers.apply_workspace(@scenario.workspace, "install_imaginarium_project", at: @scenario.database_now)
+    source = { "entry_id" => "tiny-planner", "catalog_version" => 2 }
+    criteria = [ { "text" => "Opens on the Mac.", "kind" => "build" },
+      { "text" => "Saves changes.", "kind" => "build" },
+      { "text" => "A second agent reviews the work", "kind" => "review" } ]
+    outcome = apply(body(state: "ideas", details: "Make a little planner.", imaginarium: source, criteria: criteria))
+    task = Task.find(outcome.result.fetch("task_id"))
+    assert_equal [ @scenario.workspace.reload.imaginarium_project_id, "tiny-planner", 2, 0 ],
+      task.attributes.values_at("project_id", "imaginarium_entry_id", "imaginarium_catalog_version", "contract_version")
+    stored = Criterion.where(task_id: task.id).order(:position)
+    assert_equal criteria.map { |criterion| criterion.values_at("text", "kind") }, stored.pluck(:text, :kind)
+    assert_equal({ "state" => "ideas", "added_action_ids" => [], "imaginarium_entry_id" => "tiny-planner",
+      "added_criterion_ids" => stored.ids }, written.sole.payload)
+    assert_equal source, Leverage::Reads::Shapes.task_summary(task).fetch(:imaginarium).stringify_keys
+    assert_empty Leverage::Replay.diff(@scenario.workspace_id)
+    assert_empty Leverage::LogAudit.call(@scenario.workspace_id)
+  end
+
+  test "Imaginarium tasks use the recorded project and Backlog tasks still complete their contract separately" do
+    Leverage::Timers.apply_workspace(@scenario.workspace, "install_imaginarium_project", at: @scenario.database_now)
+    source = { "entry_id" => "tiny-planner", "catalog_version" => 1 }
+    other = @scenario.project
+    assert_raises(T::Invalid) { apply(body(imaginarium: source, project_id: other.id)) }
+    assert_raises(T::Invalid) { apply(body(imaginarium: source, state: "ideas")) }
+    task = Task.find(apply(body(imaginarium: source)).result.fetch("task_id"))
+    assert_equal @scenario.workspace.reload.imaginarium_project_id, task.project_id
+    assert_equal "backlog", task.state
+    assert_empty Criterion.where(task_id: task.id)
+    assert_equal({ "state" => "backlog", "added_action_ids" => [], "imaginarium_entry_id" => "tiny-planner" }, written.sole.payload)
+  end
+
   test "adds contracted outward actions in the order given" do
     outcome = apply(body(actions: [ { "kind" => "send", "description" => "Send the update." },
                                    { "kind" => "publish", "description" => "Publish the prices." } ]))
