@@ -118,7 +118,7 @@ class Run:
     def close(self):
         self._folder.cleanup()
 
-    def run(self, call_value="nothing secret here", *, script="e2e_core_loop.sh", **extra):
+    def run(self, call_value="nothing secret here", *, script="e2e_core_loop.sh", arguments=(), **extra):
         environment = {
             "PATH": f"{self.bin}:{os.environ.get('PATH', '/usr/bin:/bin')}",
             "HOME": str(self.root),
@@ -129,7 +129,7 @@ class Run:
             **extra,
         }
         result = subprocess.run(
-            ["bash", str(self.repo / "scripts" / script)], cwd=self.repo, env=environment,
+            ["bash", str(self.repo / "scripts" / script), *arguments], cwd=self.repo, env=environment,
             capture_output=True, text=True,
             check=False, timeout=120)
         return result.returncode, result.stdout + result.stderr
@@ -243,6 +243,24 @@ class CredentialsScriptTests(unittest.TestCase):
         self.assertIn("helper.log", output)
         self.assertIn("usage-test-only.json", output)
         self.assertNotIn(COPIED_REPLY_LINE, output)
+
+
+class SpeedRunTests(unittest.TestCase):
+    """Review: speed_run.sh took an exported COMPOSE_PROJECT_NAME as its
+    project, and its cleanup removes the project's volumes, so a developer's
+    stack under that name lost its database."""
+
+    def test_an_exported_project_name_is_never_the_project_it_removes(self):
+        run = Run()
+        self.addCleanup(run.close)
+        code, output = run.run(script="speed_run.sh", arguments=("--smoke",),
+                               COMPOSE_PROJECT_NAME="made-up-dev-stack", FAKE_UP_FAILS="1")
+        self.assertNotEqual(code, 0, output)
+        calls = run.docker_calls()
+        self.assertTrue(any("down --volumes" in arguments for _tag, _project, arguments in calls), calls)
+        for _tag, project, _arguments in calls:
+            self.assertNotEqual(project, "made-up-dev-stack", calls)
+            self.assertRegex(project, r"-[0-9]+$", "the project is this run's own, with its pid")
 
 
 # A docker that notes the mode of the backup folder it is handed, then
