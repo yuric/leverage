@@ -12,8 +12,8 @@ would, so what the script does around the run is checked in a second:
   leaves an image whose tag it was given;
 - its secret scan covers the stand-in tools' record of each call, which
   holds the environment each tool was started with;
-- a .env it makes holds values of its own, never the example's published
-  placeholders (scripts/make_env.py).
+- a .env it makes holds values of its own, where the example leaves the
+  secrets empty (scripts/make_env.py), and a .env that is there is kept.
 
 Every case runs a copy of scripts/ and the files the scripts read in a
 temporary folder, so nothing is written into the checkout.
@@ -38,7 +38,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-MAKE_ENV = HERE / "make_env.py"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 SECRET = "made-up-e2e-secret-value"
@@ -302,7 +301,6 @@ class BackupFolderTests(unittest.TestCase):
         self.assertEqual(self.mode_of_backup_folder("e2e_handoff.sh"), "0o1777")
 
 
-PLACEHOLDER = "change-me"
 SECRET_KEYS = ("POSTGRES_PASSWORD", "LEVERAGE_API_DB_PASSWORD", "SECRET_KEY_BASE")
 
 
@@ -315,70 +313,62 @@ def env_values(path):
     return values
 
 
-def placeholders(path):
-    return [key for key, value in env_values(path).items() if PLACEHOLDER in value]
-
-
 class EnvFileTests(unittest.TestCase):
     """Review: a script that made .env copied .env.example, so a later
     `docker compose up` ran with passwords and a Rails secret published in
-    the repository. A .env a script makes now holds values of its own."""
+    the repository. The example now leaves them empty, and a .env a script
+    makes holds values of its own. scripts/test_make_env.py holds what
+    make_env.py writes when it is told both files; these cases hold what
+    it does when it is told neither, as every script calls it, and what
+    the scripts do around it."""
 
-    def make(self, folder):
-        return subprocess.run(
-            ["python3", "-I", str(folder / "scripts" / "make_env.py"), str(folder)],
-            capture_output=True, text=True, check=False, timeout=60)
+    def assert_secrets_of_its_own(self, made):
+        values = env_values(made)
+        for key in SECRET_KEYS:
+            self.assertRegex(values.get(key, ""), r"^[0-9a-f]{32,}$", f"{key} is not left empty")
+        self.assertEqual(len({values[key] for key in SECRET_KEYS}), 3, "each secret has a value of its own")
+        self.assertEqual(stat.S_IMODE(made.stat().st_mode), 0o600)
 
-    def repository(self):
+    def test_with_no_argument_it_makes_the_env_of_its_own_tree(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
-        return copy_repository(Path(folder.name) / "repo")
-
-    def test_the_example_has_the_placeholders_the_helper_replaces(self):
-        example = env_values(ROOT / ".env.example")
-        for key in SECRET_KEYS:
-            self.assertTrue(example[key].startswith(PLACEHOLDER), key)
-
-    def test_a_made_env_has_values_of_its_own(self):
-        first, second = self.repository(), self.repository()
-        for folder in (first, second):
-            result = self.make(folder)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("made .env", result.stdout)
-        made, other = env_values(first / ".env"), env_values(second / ".env")
-        self.assertEqual(placeholders(first / ".env"), [])
-        secrets = [made[key] for key in SECRET_KEYS]
-        self.assertEqual(len(set(secrets)), 3, "each secret has a value of its own")
-        for key in SECRET_KEYS:
-            self.assertRegex(made[key], r"^[0-9a-f]{64,}$", key)
-            self.assertNotEqual(made[key], other[key], f"{key} is new on each run")
-        self.assertEqual(made["POSTGRES_USER"], "leverage", "values that are no secret are kept")
-        self.assertEqual(stat.S_IMODE((first / ".env").stat().st_mode), 0o600)
-        self.assertEqual(list(first.glob(".env.*")), [first / ".env.example"], "no temporary file is left")
-
-    def test_an_existing_env_is_left_as_it_is(self):
-        folder = self.repository()
-        existing = "POSTGRES_PASSWORD=the-owners-own-value\n"
-        (folder / ".env").write_text(existing, encoding="utf-8")
-        result = self.make(folder)
+        repo = copy_repository(Path(folder.name) / "repo")
+        elsewhere = Path(folder.name) / "elsewhere"
+        elsewhere.mkdir()
+        result = subprocess.run(
+            ["python3", "-I", str(repo / "scripts" / "make_env.py")], cwd=elsewhere,
+            capture_output=True, text=True, check=False, timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual((folder / ".env").read_text(encoding="utf-8"), existing)
-        self.assertNotIn("made .env", result.stdout)
+        self.assert_secrets_of_its_own(repo / ".env")
+        self.assertEqual(env_values(repo / ".env")["POSTGRES_USER"], "leverage", "values that are no secret are kept")
+        self.assertEqual(list(elsewhere.iterdir()), [], "nothing is written where it was called from")
+        self.assertEqual(sorted(path.name for path in repo.glob(".env*")), [".env", ".env.example"],
+                         "no temporary file is left")
+        self.assertFalse((ROOT / ".env").exists() and (ROOT / ".env").samefile(repo / ".env"))
 
     def test_a_script_makes_env_with_the_helper_in_its_own_tree(self):
-        for script in ("e2e_core_loop.sh", "e2e_credentials.sh", "e2e_handoff.sh"):
+        for script in ("e2e_core_loop.sh", "e2e_credentials.sh", "e2e_handoff.sh", "speed_run.sh"):
             with self.subTest(script=script):
                 run = Run()
                 self.addCleanup(run.close)
                 run.run(script=script, FAKE_UP_FAILS="1", API_IMAGE_TAG="made-up-tag")
                 made = run.repo / ".env"
                 self.assertTrue(made.exists(), "the script made .env in the copy it ran from")
-                self.assertEqual(placeholders(made), [])
+                self.assert_secrets_of_its_own(made)
 
-    def test_no_script_copies_the_example(self):
-        for script in sorted(HERE.glob("*.sh")):
-            with self.subTest(script=script.name):
-                self.assertNotRegex(script.read_text(encoding="utf-8"), r"cp [^\n]*\.env\.example")
+    def test_a_script_leaves_an_existing_env_as_it_is_and_goes_on(self):
+        """make_env.py exits 1 on a .env that is there, so a script that
+        called it without looking first would stop before its run."""
+        existing = "POSTGRES_PASSWORD=the-owners-own-value\n"
+        for script in ("e2e_core_loop.sh", "e2e_credentials.sh", "e2e_handoff.sh", "speed_run.sh"):
+            with self.subTest(script=script):
+                run = Run()
+                self.addCleanup(run.close)
+                (run.repo / ".env").write_text(existing, encoding="utf-8")
+                _code, output = run.run(script=script, FAKE_UP_FAILS="1", API_IMAGE_TAG="made-up-tag")
+                self.assertEqual((run.repo / ".env").read_text(encoding="utf-8"), existing)
+                self.assertNotIn("make_env:", output)
+                self.assertTrue(run.docker_calls(), "the script went on to its first docker call")
 
 
 # A docker for the drill: every query answers 1, and the first `stop`
