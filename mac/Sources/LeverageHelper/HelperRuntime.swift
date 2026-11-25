@@ -58,13 +58,29 @@ final class HelperRuntime: Sendable {
         switch request.kind {
         case .startSeat: result = await launcher.start(request)
         case .stopSeat: result = await launcher.stop(request)
-        case .runAddChecks: result = await checks.add(request)
+        case .runAddChecks:
+            cleanup.addBegan(request)
+            result = await checks.add(request)
         case .verify: result = await checks.verify(request)
         case .installTool: result = await installer.handle(request)
         case .openSignIn: result = await checks.signInAgain(request)
         case .readUsage: result = await usageRead.run(request)
         }
-        return Task.isCancelled ? nil : result
+        if Task.isCancelled {
+            // Nothing is reported for it, so nothing it saved may stay.
+            await resultNotAccepted(request, result)
+            return nil
+        }
+        return result
+    }
+
+    /// A result the server did not take. A finished add saved a token or a
+    /// signed-in account folder before its result went out; the server
+    /// forgets the credential, so the helper removes them (`rollBackAdd`).
+    /// Every other request saved nothing that is the server's to list.
+    func resultNotAccepted(_ request: HelperRequest, _ result: HelperRequestResult) async {
+        guard request.kind == .runAddChecks, result.outcome == .finished else { return }
+        cleanup.rollBackAdd(request)
     }
 
     private func rejectForgotten(_ request: HelperRequest) async -> HelperRequestResult {
@@ -80,7 +96,10 @@ final class HelperRuntime: Sendable {
     /// Runs the request loop until `401` or `shutdown()`, and answers the
     /// helper's exit code.
     func run() async -> Int32 {
-        let loop = RequestLoop(api: api, timings: timings, log: log, running: cleanup.requests) { [self] request in
+        let loop = RequestLoop(
+            api: api, timings: timings, log: log, running: cleanup.requests,
+            onUnaccepted: { [self] request, result in await resultNotAccepted(request, result) }
+        ) { [self] request in
             await handle(request)
         }
         let task = Task { await loop.run() }

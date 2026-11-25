@@ -245,6 +245,23 @@ could not be verified.
 Readings are kept with their credential. The sweep deletes finished
 and failed read requests after seven days.
 
+An Add saves the token, or the signed-in settings folder, before the
+server takes the add's result. When the server does not take it (it
+refuses it, or the helper stops or gives up before it is sent), the
+helper removes what that add saved, so nothing stays for a credential
+that Credentials will never list. If the result did reach the server
+although the helper could not tell, the credential is listed without its
+token or sign-in: Verify fails, and Sign in again, or Remove and Add,
+mends it.
+
+Three cases still leave something behind that Credentials does not list
+and so cannot remove: the helper is killed outright during an Add, the
+app quits between a Remove and its cleanup record, or the database is
+restored from a dump older than a credential, or replaced. What is left
+is a Keychain item (service `leverage API token`, account the credential
+ID) or a folder `<support folder>/accounts/<credential id>/`. Delete it
+by hand: the item in Keychain Access, the folder in the Finder.
+
 ## Where the log is, and what destroys it
 
 The event log and every other record of the workspace are in PostgreSQL, in
@@ -387,7 +404,10 @@ the drill runs the repository's form.
 **Afterwards, the owner** opens the app, which issues the helper a new
 token. In Credentials the owner runs Verify all and chooses Sign in again
 for any login that needs it. A provider token missing from this Mac needs
-to be removed and added again. Leverage tokens issued after the dump no longer
+to be removed and added again. A token or a settings folder saved for a
+credential the restored database does not hold stays on this Mac, and is
+deleted by hand (see [Where things live](#where-things-live)). Leverage
+tokens issued after the dump no longer
 match, and the log holds nothing written after the dump. The app finds by
 itself that the Needs you cursor it keeps (`<support folder>/inbox-cursor`)
 is of the log before the restore, starts it again, and announces every

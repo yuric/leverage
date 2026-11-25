@@ -33,6 +33,110 @@ struct CredentialCleanupTests {
         #expect(FileManager.default.fileExists(atPath: external.path))
     }
 
+    // What an Add saved is undone when the server never took its result:
+    // the token and the account folder, and nothing of a later add.
+
+    private func add(_ credential: UUID) -> HelperRequest {
+        helperRequest(.runAddChecks, credential: credential, params: .init(provider: .claude, credentialKind: .login))
+    }
+
+    @Test("rolling back an add deletes its token and its folder, and the id is not forgotten")
+    func rollsBackAnAdd() async throws {
+        let rig = try HelperRig()
+        let vault = MemoryTokenVault()
+        let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: vault,
+                                        requests: RunningRequests(), log: quietLog)
+        let credential = UUID(), other = UUID()
+        let request = add(credential)
+        cleanup.addBegan(request)
+        try vault.store(ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-000000000731"), credentialID: credential)
+        try vault.store(ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-000000000732"), credentialID: other)
+        let folder = try cleanup.createFolder(for: credential)
+        let kept = try cleanup.createFolder(for: other)
+
+        #expect(cleanup.rollBackAdd(request))
+
+        #expect(try vault.read(credentialID: credential) == nil)
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+        #expect(try vault.read(credentialID: other) != nil)
+        #expect(FileManager.default.fileExists(atPath: kept.path))
+        #expect(!cleanup.requests.isForgotten(credential))
+    }
+
+    @Test("an add is not rolled back once a later add of the same credential began")
+    func laterAddKeepsWhatItSaved() async throws {
+        let rig = try HelperRig()
+        let vault = MemoryTokenVault()
+        let cleanup = CredentialCleanup(folders: rig.folders, pending: PendingTokens(), vault: vault,
+                                        requests: RunningRequests(), log: quietLog)
+        let credential = UUID()
+        let first = add(credential), retry = add(credential)
+        cleanup.addBegan(first)
+        cleanup.addBegan(retry)
+        try vault.store(ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-000000000733"), credentialID: credential)
+        let folder = try cleanup.createFolder(for: credential)
+
+        // The first add's result is refused late, after Retry saved its own.
+        #expect(!cleanup.rollBackAdd(first))
+        #expect(try vault.read(credentialID: credential) != nil)
+        #expect(FileManager.default.fileExists(atPath: folder.path))
+
+        #expect(cleanup.rollBackAdd(retry))
+        #expect(try vault.read(credentialID: credential) == nil)
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+    }
+
+    @Test("only a finished add is rolled back: a Verify, a failed add and a request with no credential are left alone")
+    func onlyFinishedAdds() async throws {
+        let rig = try HelperRig()
+        let vault = MemoryTokenVault()
+        let runtime = HelperRuntime(api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog, vault: vault)
+        let credential = UUID()
+        try vault.store(ProviderToken(provider: .openrouter, value: "LVRG-TOKEN-000000000734"), credentialID: credential)
+        let folder = try runtime.cleanup.createFolder(for: credential)
+        let finished = HelperRequestResult(outcome: .finished, checks: [], toolVersion: nil)
+        let failed = HelperRequestResult(outcome: .failed, checks: [], toolVersion: nil)
+        let request = add(credential)
+        runtime.cleanup.addBegan(request)
+
+        let verify = helperRequest(.verify, credential: credential, params: .init(provider: .claude, credentialKind: .login))
+        await runtime.resultNotAccepted(verify, finished)
+        await runtime.resultNotAccepted(request, failed)
+        await runtime.resultNotAccepted(helperRequest(.runAddChecks), finished)
+        #expect(try vault.read(credentialID: credential) != nil)
+        #expect(FileManager.default.fileExists(atPath: folder.path))
+
+        await runtime.resultNotAccepted(request, finished)
+        #expect(try vault.read(credentialID: credential) == nil)
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+    }
+
+    @Test("a login add whose result the server refuses leaves no account folder")
+    func refusedLoginAddIsRolledBack() async throws {
+        let rig = try HelperRig()
+        let runtime = HelperRuntime(
+            api: rig.api, settings: rig.settings, timings: fastTimings, log: quietLog, prober: StandInPrompt())
+        let credential = UUID()
+        let queue = RequestLoopTests.Queue([.success(add(credential))])
+        let signedInAtReport = Locked<[Bool]>([])
+        rig.api.script {
+            $0.next = { _ in try await queue.next() }
+            $0.reportRequestResult = { _, result, _ in
+                let folder = rig.folders.existing(for: credential)
+                signedInAtReport.update {
+                    $0.append(result.outcome == .finished && folder.map { rig.tools.isSignedIn("claude", accountFolder: $0) } == true)
+                }
+                throw TransportError(code: .notFound, message: "made up")
+            }
+        }
+        let loop = Task { await runtime.run() }
+
+        #expect(await eventually { signedInAtReport.value == [true] && rig.folders.existing(for: credential) == nil })
+        await runtime.shutdown()
+        _ = await loop.value
+        #expect(rig.folders.existing(for: credential) == nil)
+    }
+
     @Test("confirmed removal cleans the earlier private account folder and acknowledges completion")
     func removesLegacyFolder() async throws {
         let rig = try HelperRig()
