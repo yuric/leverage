@@ -949,7 +949,7 @@ class Walk
   end
 
   # Turns an agent back on, or now and then off; moves an agent the app
-  # runs to another login; or changes its model.
+  # runs to another login or changes its model; or renames a Prompt seat.
   def change_seat(index)
     seat = one(seats).reload
     params = { "id" => seat.id }
@@ -958,9 +958,13 @@ class Walk
     elsif chance(0.2)
       params["enabled"] = false
     elsif seat.credential_id && chance(0.6)
-      params["credential_id"] = one(@logins).id
+      login = one(@logins)
+      params["credential_id"] = login.id
+      params["model"] = Leverage::ModelCatalog.models(login.provider).first if login.provider != seat.provider
+    elsif seat.credential_id
+      params["model"] = one(Leverage::ModelCatalog.models(seat.provider).first(2) + [ nil ])
     else
-      params["model"] = one([ "made-up-model", "another-made-up-model", nil ])
+      params["name"] = one([ "Made-up #{seat.role} A", "Made-up #{seat.role} B", seat.name ])
     end
     command(index, :change_seat, "change_seat", @owner, params)
   end
@@ -1304,7 +1308,7 @@ class Walk
   # A seat on a login (run by the app), or one that connects on its own.
   def connect(role, index, login = nil, provider: "claude")
     params = { "name" => "Made-up #{role} #{index}", "role" => role, "provider" => login&.provider || provider,
-               "model" => "made-up-model", "effort" => nil }
+               "model" => (Leverage::ModelCatalog.models(login.provider).first if login), "effort" => nil }
     params["credential_id"] = login.id if login
     Seat.find(setup("connect_seat", @owner, params).fetch("seat_id"))
   end

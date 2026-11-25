@@ -120,7 +120,7 @@
     {"command": "connect_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "pause_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "resume_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
-    {"command": "change_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
+    {"command": "change_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": true},
     {"command": "remove_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "start_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},
     {"command": "stop_seat", "work_call": false, "blocked_by_hold": false, "allowed_while_pending": false},

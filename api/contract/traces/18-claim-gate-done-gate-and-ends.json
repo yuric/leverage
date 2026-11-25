@@ -26,12 +26,12 @@
       {"id": "$credential:codex_o", "kind": "login", "provider": "codex", "name": "Codex O", "state": "active", "limited_until": null, "position": 6, "model": null, "effort": null, "strength_rank": 1}
     ],
     "seats": [
-      {"id": "$seat:b1", "name": "Builder 1", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_1", "enabled": true, "paused": false, "last_polled_at": null},
-      {"id": "$seat:b2", "name": "Builder 2", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_2", "enabled": true, "paused": false, "last_polled_at": null},
-      {"id": "$seat:b3", "name": "Builder 3", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_3", "enabled": true, "paused": false, "last_polled_at": null},
-      {"id": "$seat:b4", "name": "Builder 4", "provider": "claude", "model": "claude-model-1", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_4", "enabled": true, "paused": false, "last_polled_at": null},
-      {"id": "$seat:reviewer", "name": "Reviewer", "provider": "codex", "model": "codex-model-1", "effort": "high", "role": "reviewer", "strength_rank": 2, "credential_id": "$credential:codex_r", "enabled": true, "paused": false, "last_polled_at": null},
-      {"id": "$seat:orchestrator", "name": "Orchestrator", "provider": "codex", "model": "codex-model-1", "effort": "high", "role": "orchestrator", "strength_rank": 2, "credential_id": "$credential:codex_o", "enabled": true, "paused": false, "last_polled_at": "@t:-10"}
+      {"id": "$seat:b1", "name": "Builder 1", "provider": "claude", "model": "claude-opus-5-5", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_1", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:b2", "name": "Builder 2", "provider": "claude", "model": "claude-opus-5-5", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_2", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:b3", "name": "Builder 3", "provider": "claude", "model": "claude-opus-5-5", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_3", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:b4", "name": "Builder 4", "provider": "claude", "model": "claude-opus-5-5", "effort": "high", "role": "builder", "strength_rank": 2, "credential_id": "$credential:claude_4", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:reviewer", "name": "Reviewer", "provider": "codex", "model": "gpt-6.2-astra", "effort": "", "role": "reviewer", "strength_rank": 2, "credential_id": "$credential:codex_r", "enabled": true, "paused": false, "last_polled_at": null},
+      {"id": "$seat:orchestrator", "name": "Orchestrator", "provider": "codex", "model": "gpt-6.2-astra", "effort": "", "role": "orchestrator", "strength_rank": 2, "credential_id": "$credential:codex_o", "enabled": true, "paused": false, "last_polled_at": "@t:-10"}
     ],
     "projects": [
       {"id": "$project:site", "name": "Website", "budget": null, "spent": 0, "paused": false}
@@ -188,7 +188,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:12", "type": "job.claimed", "schema_version": 1, "at": "@t:60", "effective_at": "@t:60", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_claim_b1", "cause_id": null, "command_id": "$key:job_claim_60", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:12", "type": "job.claimed", "schema_version": 1, "at": "@t:60", "effective_at": "@t:60", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_claim_b1", "cause_id": null, "command_id": "$key:job_claim_60", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:13", "type": "check.started", "schema_version": 1, "at": "@t:60", "effective_at": "@t:60", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_claim_b1", "cause_id": null, "command_id": "$key:job_claim_60", "payload": {"attempt_number": 1}}
         ],
         "steps_opened": [],
@@ -210,7 +210,7 @@
           {"ref": "@event:14", "type": "job.finished", "schema_version": 1, "at": "@t:80", "effective_at": "@t:80", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_claim_b1", "cause_id": null, "command_id": "$key:job_result_80", "payload": {}},
           {"ref": "@event:15", "type": "check.finished", "schema_version": 1, "at": "@t:80", "effective_at": "@t:80", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_claim_b1", "cause_id": null, "command_id": "$key:job_result_80", "payload": {"hook": "task.before_claim", "rule_id": "$rule:claim_rule", "rule_version_id": "$rule_version:claim_rule_1", "result": "passed", "effect": null, "wait_cause": null, "subject_kind": "seat", "subject_id": "$seat:b1", "input_hash": "acb8777bc84753da1b58d11f3bb4568f5a3fc0c0cc9fdb5ae74643f383e24fc9"}},
           {"ref": "@event:16", "type": "cost.reported", "schema_version": 1, "at": "@t:80", "effective_at": "@t:80", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_claim_b1", "cause_id": null, "command_id": "$key:job_result_80", "payload": {"tokens": 300, "spend": 0}},
-          {"ref": "@event:17", "type": "task.claimed", "schema_version": 1, "at": "@t:80", "effective_at": "@t:80", "actor_kind": "seat", "actor_id": "$seat:b1", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": "@event:15", "command_id": "$key:b1_claim_50", "payload": {"seat_id": "$seat:b1", "credential_id": "$credential:claude_1", "model": "claude-model-1"}}
+          {"ref": "@event:17", "type": "task.claimed", "schema_version": 1, "at": "@t:80", "effective_at": "@t:80", "actor_kind": "seat", "actor_id": "$seat:b1", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": null, "subject_id": null, "cause_id": "@event:15", "command_id": "$key:b1_claim_50", "payload": {"seat_id": "$seat:b1", "credential_id": "$credential:claude_1", "model": "claude-opus-5-5"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "briefing", "step_class": "working", "round": 0, "subject_kind": null, "subject_id": null, "seat_id": "$seat:b1", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:17"}
@@ -348,7 +348,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:27", "type": "job.claimed", "schema_version": 1, "at": "@t:120", "effective_at": "@t:120", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "job", "subject_id": "$job:t2_claim_b2_2", "cause_id": null, "command_id": "$key:job_claim_120", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:27", "type": "job.claimed", "schema_version": 1, "at": "@t:120", "effective_at": "@t:120", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "job", "subject_id": "$job:t2_claim_b2_2", "cause_id": null, "command_id": "$key:job_claim_120", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:28", "type": "check.started", "schema_version": 1, "at": "@t:120", "effective_at": "@t:120", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t2_claim_b2", "cause_id": null, "command_id": "$key:job_claim_120", "payload": {"attempt_number": 2}}
         ],
         "steps_opened": [],
@@ -414,7 +414,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:34", "type": "job.claimed", "schema_version": 1, "at": "@t:160", "effective_at": "@t:160", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "job", "subject_id": "$job:t2_claim_b3", "cause_id": null, "command_id": "$key:job_claim_160", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:34", "type": "job.claimed", "schema_version": 1, "at": "@t:160", "effective_at": "@t:160", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "job", "subject_id": "$job:t2_claim_b3", "cause_id": null, "command_id": "$key:job_claim_160", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:35", "type": "check.started", "schema_version": 1, "at": "@t:160", "effective_at": "@t:160", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t2_claim_b3", "cause_id": null, "command_id": "$key:job_claim_160", "payload": {"attempt_number": 1}}
         ],
         "steps_opened": [],
@@ -480,7 +480,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:41", "type": "job.claimed", "schema_version": 1, "at": "@t:200", "effective_at": "@t:200", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "job", "subject_id": "$job:t2_claim_b4", "cause_id": null, "command_id": "$key:job_claim_200", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:41", "type": "job.claimed", "schema_version": 1, "at": "@t:200", "effective_at": "@t:200", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "job", "subject_id": "$job:t2_claim_b4", "cause_id": null, "command_id": "$key:job_claim_200", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:42", "type": "check.started", "schema_version": 1, "at": "@t:200", "effective_at": "@t:200", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:2", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t2_claim_b4", "cause_id": null, "command_id": "$key:job_claim_200", "payload": {"attempt_number": 1}}
         ],
         "steps_opened": [],
@@ -651,7 +651,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:57", "type": "review.started", "schema_version": 1, "at": "@t:250", "effective_at": "@t:250", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:review_claim_250", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
+          {"ref": "@event:57", "type": "review.started", "schema_version": 1, "at": "@t:250", "effective_at": "@t:250", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "review", "subject_id": "$review:t1_r0", "cause_id": null, "command_id": "$key:review_claim_250", "payload": {"credential_id": "$credential:codex_r", "model": "gpt-6.2-astra"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 0, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:57"}
@@ -714,7 +714,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:61", "type": "job.claimed", "schema_version": 1, "at": "@t:280", "effective_at": "@t:280", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_done_r0", "cause_id": null, "command_id": "$key:job_claim_280", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:61", "type": "job.claimed", "schema_version": 1, "at": "@t:280", "effective_at": "@t:280", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "job", "subject_id": "$job:t1_done_r0", "cause_id": null, "command_id": "$key:job_claim_280", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:62", "type": "check.started", "schema_version": 1, "at": "@t:280", "effective_at": "@t:280", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 0, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_done_r0", "cause_id": null, "command_id": "$key:job_claim_280", "payload": {"attempt_number": 1}}
         ],
         "steps_opened": [],
@@ -806,7 +806,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:72", "type": "job.claimed", "schema_version": 1, "at": "@t:330", "effective_at": "@t:330", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "job", "subject_id": "$job:t1_submit_r1", "cause_id": null, "command_id": "$key:job_claim_330", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:72", "type": "job.claimed", "schema_version": 1, "at": "@t:330", "effective_at": "@t:330", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "job", "subject_id": "$job:t1_submit_r1", "cause_id": null, "command_id": "$key:job_claim_330", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:73", "type": "check.started", "schema_version": 1, "at": "@t:330", "effective_at": "@t:330", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_submit_r1", "cause_id": null, "command_id": "$key:job_claim_330", "payload": {"attempt_number": 1}}
         ],
         "steps_opened": [],
@@ -885,7 +885,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:78", "type": "task.claimed", "schema_version": 1, "at": "@t:640", "effective_at": "@t:640", "actor_kind": "seat", "actor_id": "$seat:b1", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:b1_claim_640", "payload": {"seat_id": "$seat:b1", "credential_id": "$credential:claude_1", "model": "claude-model-1"}}
+          {"ref": "@event:78", "type": "task.claimed", "schema_version": 1, "at": "@t:640", "effective_at": "@t:640", "actor_kind": "seat", "actor_id": "$seat:b1", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": null, "subject_id": null, "cause_id": null, "command_id": "$key:b1_claim_640", "payload": {"seat_id": "$seat:b1", "credential_id": "$credential:claude_1", "model": "claude-opus-5-5"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "briefing", "step_class": "working", "round": 1, "subject_kind": null, "subject_id": null, "seat_id": "$seat:b1", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:78"}
@@ -951,7 +951,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:81", "type": "review.started", "schema_version": 1, "at": "@t:670", "effective_at": "@t:670", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:review_claim_670", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
+          {"ref": "@event:81", "type": "review.started", "schema_version": 1, "at": "@t:670", "effective_at": "@t:670", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:review_claim_670", "payload": {"credential_id": "$credential:codex_r", "model": "gpt-6.2-astra"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 1, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:81"}
@@ -1014,7 +1014,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:85", "type": "job.claimed", "schema_version": 1, "at": "@t:700", "effective_at": "@t:700", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "job", "subject_id": "$job:t1_done_r1_1", "cause_id": null, "command_id": "$key:job_claim_700", "payload": {"credential_id": "$credential:codex_o", "model": "codex-model-1"}},
+          {"ref": "@event:85", "type": "job.claimed", "schema_version": 1, "at": "@t:700", "effective_at": "@t:700", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "job", "subject_id": "$job:t1_done_r1_1", "cause_id": null, "command_id": "$key:job_claim_700", "payload": {"credential_id": "$credential:codex_o", "model": "gpt-6.2-astra"}},
           {"ref": "@event:86", "type": "check.started", "schema_version": 1, "at": "@t:700", "effective_at": "@t:700", "actor_kind": "seat", "actor_id": "$seat:orchestrator", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "rule_check", "subject_id": "$rule_check:t1_done_r1", "cause_id": null, "command_id": "$key:job_claim_700", "payload": {"attempt_number": 1}}
         ],
         "steps_opened": [],
@@ -1075,7 +1075,7 @@
         "outcome": "completed",
         "refusal": null,
         "events": [
-          {"ref": "@event:90", "type": "review.started", "schema_version": 1, "at": "@t:1000", "effective_at": "@t:1000", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:review_claim_1000", "payload": {"credential_id": "$credential:codex_r", "model": "codex-model-1"}}
+          {"ref": "@event:90", "type": "review.started", "schema_version": 1, "at": "@t:1000", "effective_at": "@t:1000", "actor_kind": "seat", "actor_id": "$seat:reviewer", "project_id": "$project:site", "task_id": "$task:1", "round": 1, "subject_kind": "review", "subject_id": "$review:t1_r1", "cause_id": null, "command_id": "$key:review_claim_1000", "payload": {"credential_id": "$credential:codex_r", "model": "gpt-6.2-astra"}}
         ],
         "steps_opened": [
           {"task_id": "$task:1", "kind": "review", "step_class": "working", "round": 1, "subject_kind": "criterion", "subject_id": "$criterion:t1_review", "seat_id": "$seat:reviewer", "cause_kind": null, "cause_rule_id": null, "opening_event_id": "@event:90"}

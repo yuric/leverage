@@ -5,7 +5,7 @@ module Leverage
   # token. What a started, stopped or removed run changes, a review the
   # seat held, a Working task it held, and the start_seat requests. Called
   # inside a command's transaction by connect_seat, start_seat,
-  # issue_seat_token, issue_landing_prompt, issue_helper_token, report_run_started,
+  # issue_seat_token, issue_helper_token, report_run_started,
   # report_run_stopped, remove_seat, the seat_run_placement timer, and the
   # handoff (Handoff, the reports, a closing hold, a fresh lease) through
   # ensure_run_on and ended_by_interruption; every event goes through
@@ -203,21 +203,6 @@ module Leverage
       seat.credential_id && queue(ctx, "stop_seat", seat: seat)
     end
 
-    # New prompt gives the seat to another agent (GA-17). Release its
-    # held work, leaving any action still waiting for this builder alone.
-    # The entry has already replaced the token hash.
-    def release_for_new_prompt(ctx, seat)
-      release_working_task(ctx, seat, reason: "new_prompt")
-      hold_finishing_tasks(ctx, seat, cause: nil, include_waiting: false)
-      release_held_reviews(ctx, seat)
-
-      Job.where(workspace_id: seat.workspace_id, claimed_by_seat_id: seat.id, state: "claimed")
-        .order(:claimed_at, :id).each do |job|
-        timer = Timers.job_timer_for(job)
-        Transitions::Table.entry_for(timer).new.miss_now(ctx, job)
-      end
-    end
-
     # A seat's run has stopped, or is treated as stopped (IN-30): run state
     # stopped, the token ended (IN-17), and a review the seat holds released
     # so another reviewer can claim it (IF-21, L914), after its pending pass,
@@ -294,12 +279,10 @@ module Leverage
     end
 
     # Include work still waiting for this builder when the seat can no
-    # longer build (L147, AP-19). A new prompt leaves those actions waiting
-    # for the same seat. Finishing opens a hold only for open approvals.
-    def hold_finishing_tasks(ctx, seat, cause:, include_waiting: true)
+    # longer build (L147, AP-19). Finishing opens a hold only for open approvals.
+    def hold_finishing_tasks(ctx, seat, cause:)
       finishing = Task.where(workspace_id: seat.workspace_id, state: "finishing")
-      held = finishing.where(holder_seat_id: seat.id)
-      tasks = include_waiting ? held.or(finishing.where(holder_seat_id: nil, builder_seat_id: seat.id)) : held
+      tasks = finishing.where(holder_seat_id: seat.id).or(finishing.where(holder_seat_id: nil, builder_seat_id: seat.id))
       tasks.order(:created_at, :id).each do |task|
         Finishing.lose_builder(ctx, task, cause: cause)
       end

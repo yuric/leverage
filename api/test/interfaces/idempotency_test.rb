@@ -47,6 +47,8 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
 
   # operation => the method that builds its state and returns its Call.
   CASES = {
+    "create_task" => :create_task,
+    "report_model" => :report_model,
     "claim_next_task" => :claim_next_task,
     "acknowledge_task_briefing" => :acknowledge_task_briefing,
     "heartbeat_task" => :heartbeat_task,
@@ -507,6 +509,18 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
     owner_call(ids: { "id" => review.task_id })
   end
 
+  def create_task
+    body = { "title" => "A made-up task", "details" => "Add sample work.",
+             "criteria" => [ { "kind" => "build", "text" => "Produce a sample." },
+                             { "kind" => "review", "text" => "Check the sample." } ] }
+    Call.new(token: token(builder_seat), body: body)
+  end
+
+  def report_model
+    seat = @scenario.seat(provider: "claude", model: "")
+    Call.new(token: token(seat), body: { "model" => "claude-opus-5-5", "effort" => "high" })
+  end
+
   def issue_landing_prompt
     owner_call(ids: { "id" => @scenario.seat.id }, body: { "connection" => "http" })
   end
@@ -664,7 +678,7 @@ class IdempotencyHttpTest < ActionDispatch::IntegrationTest
 
   def change_seat
     owner_call(ids: { "id" => builder_seat.id },
-      body: { "name" => "Made-up agent #{SecureRandom.hex(3)}", "model" => nil, "effort" => "high", "strength_rank" => 2 })
+      body: { "name" => "Made-up agent #{SecureRandom.hex(3)}", "model" => "claude-opus-5-5", "effort" => "high", "strength_rank" => 2 })
   end
 
   # --- the cases: milestone 4 ----------------------------------------------

@@ -123,6 +123,7 @@ module Leverage
         "verify_all_credentials" => "v1/owner/credentials#verify_all",
         "report_reading" => "v1/helper/credentials#readings",
         # General role and landing prompt.
+        "report_model" => "v1/agent/seats#report_model",
         "get_join" => "v1/agent/join#show",
         "issue_landing_prompt" => "v1/owner/seats#issue_landing_prompt"
       }.freeze

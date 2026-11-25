@@ -28,20 +28,20 @@ class ChangeSeatTest < ActiveSupport::TestCase
   setup do
     use_scenario
     @login = scenario.credential
-    @builder = scenario.seat(role: "builder", credential: @login, run_state: "running", wanted_running: true)
+    @builder = scenario.seat(role: "builder", credential: @login, run_state: "running", wanted_running: true, model: "")
   end
 
   def change(seat, **fields) = owner_run("change_seat", { "id" => seat.id }.merge(fields.transform_keys(&:to_s)))
 
   test "name, model, effort and strength rank change at once, with seat.changed by the owner" do
-    outcome, events = change(@builder, name: "Made-up renamed", model: "made-up-model-2", effort: "high",
+    outcome, events = change(@builder, name: "Made-up renamed", model: "claude-opus-5-5", effort: "high",
       strength_rank: 3)
 
     assert_completed(outcome)
     event = events.sole
     assert_equal [ "seat.changed", "owner", scenario.owner.id, "seat", @builder.id, nil, {} ],
       [ event.type, event.actor_kind, event.actor_id, event.subject_kind, event.subject_id, event.task_id, event.payload ]
-    assert_equal [ "Made-up renamed", "made-up-model-2", "high", 3 ],
+    assert_equal [ "Made-up renamed", "claude-opus-5-5", "high", 3 ],
       @builder.reload.attributes.values_at("name", "model", "effort", "strength_rank")
   end
 
@@ -273,6 +273,91 @@ class ChangeSeatTest < ActiveSupport::TestCase
     end
   end
 
+  test "renaming or reassigning the login within the same provider preserves a legacy model and effort" do
+    @builder.update!(model: "made-up-old-model", effort: "made-up-old-effort")
+    login = scenario.credential(provider: @builder.provider)
+
+    assert_completed(change(@builder, name: "Made-up renamed").first)
+    assert_completed(change(@builder, credential_id: login.id).first)
+    assert_equal [ "Made-up renamed", login.id, "made-up-old-model", "made-up-old-effort" ],
+      @builder.reload.attributes.values_at("name", "credential_id", "model", "effort")
+  end
+
+  test "a model change or a different provider validates the resulting model and effort together" do
+    @builder.update!(model: "claude-opus-5-5", effort: "high")
+    login = scenario.credential(provider: "codex")
+
+    assert_raises(T::Invalid) { change(@builder, model: "made-up-new-model") }
+    assert_raises(T::Invalid) { change(@builder, credential_id: login.id) }
+    assert_raises(T::Invalid) { change(@builder, credential_id: login.id, model: "gpt-6.2-astra") }
+
+    assert_completed(change(@builder, credential_id: login.id, model: "gpt-6.2-astra", effort: nil).first)
+    assert_equal [ login.id, "codex", "gpt-6.2-astra", "" ], @builder.reload.attributes.values_at("credential_id", "provider", "model", "effort")
+  end
+
+  test "the owner cannot set or clear a Prompt seat's reported model or effort" do
+    seat = own_seat
+    [ { model: "claude-opus-5-5" }, { model: nil }, { effort: nil } ].each do |fields|
+      assert_raises(T::Invalid) { change(seat, **fields) }
+    end
+  end
+
+  test "Deliver off cancels a pending submit before releasing its Working task and closes the seat-bound hold" do
+    task = working_task(@builder)
+    hold = open_hold(task, "credential_limit", credential: @login, item: false)
+    pending = scenario.pending_transition(task, command: "submit", requester: @builder)
+    receipt = Command.create!(workspace_id: scenario.workspace_id, caller_kind: "seat", caller_id: @builder.id,
+      key: pending.command_key, command: "submit", request_hash: "made-up", outcome: "pending", pending_transition_id: pending.id)
+    permissions = { "work" => true, "deliver" => false, "create" => true }
+    outcome, events = change(@builder, permissions: permissions)
+
+    assert_equal({ "helper_request_id" => nil }, assert_completed(outcome).result)
+    changed, released, closed = events
+    assert_equal %w[seat.changed task.released hold.closed], events.map(&:type)
+    assert_equal [ task.id, changed.id, "deliver_turned_off" ], [ released.task_id, released.cause_id, released.payload.fetch("reason") ]
+    assert_equal [ hold.id, released.command_id ], [ closed.subject_id, closed.command_id ]
+    assert_not_nil hold.reload.closed_at
+    assert_equal [ "ready", nil, nil, nil ], task.reload.attributes.values_at("state", "holder_seat_id", "builder_seat_id", "lease_due_at")
+    assert_equal "cancelled", pending.reload.state
+    assert_equal [ "refused", "invalid_state", true ], [ receipt.reload.outcome, receipt.refusal.fetch("code"), receipt.notify ]
+    assert_equal [ true, false, true, true, true ], @builder.reload.attributes.values_at("may_work", "may_deliver", "may_create", "enabled", "wanted_running")
+    assert_empty HelperRequest.where(seat_id: @builder.id)
+  end
+
+  test "Deliver off cancels a provisional claim and releases its reservation without a task release event" do
+    task = scenario.task(state: "ready")
+    task.update!(holder_seat_id: @builder.id)
+    pending = scenario.pending_transition(task, command: "claim", requester: @builder)
+    permissions = { "work" => true, "deliver" => false, "create" => true }
+
+    outcome, events = change(@builder, permissions: permissions)
+
+    assert_completed(outcome)
+    assert_equal %w[seat.changed], events.map(&:type)
+    assert_equal [ "ready", nil ], task.reload.attributes.values_at("state", "holder_seat_id")
+    assert_equal "cancelled", pending.reload.state
+
+    repeated, events = change(@builder, permissions: permissions)
+    assert_completed(repeated)
+    assert_empty events
+  end
+
+  test "Deliver off leaves the builder's current and waiting approved outward actions assigned" do
+    waiting = scenario.finishing_task(builder: @builder, holder: false, actions: [ { kind: "send", state: "approved" } ])
+    active = scenario.finishing_task(builder: @builder, holder: true, actions: [ { kind: "send", state: "approved" } ])
+    actions = Action.where(task_id: [ active.id, waiting.id ]).order(:id)
+    approval = actions.pluck(:id, :state, :approved_by_kind, :approved_by_id)
+    permissions = { "work" => true, "deliver" => false, "create" => true }
+
+    outcome, events = change(@builder, permissions: permissions)
+
+    assert_completed(outcome)
+    assert_equal %w[seat.changed], events.map(&:type)
+    assert_equal [ "finishing", @builder.id, @builder.id ], active.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
+    assert_equal [ "finishing", @builder.id, nil ], waiting.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
+    assert_equal approval, actions.pluck(:id, :state, :approved_by_kind, :approved_by_id)
+  end
+
   test "turning off a seat with a Working task: seat.changed, task.released seat_disabled caused by it, stop_seat" do
     task = working_task(@builder)
     outcome, events = change(@builder, enabled: false)
@@ -413,8 +498,8 @@ class ChangeSeatTest < ActiveSupport::TestCase
     ready.update!(holder_seat_id: claimant.id)
     scenario.pending_transition(ready, command: "claim", requester: claimant)
     calls = recording_cancels do
-      change(@builder, name: "Made-up renamed", model: "made-up-model-2", enabled: true)
-      change(claimant, effort: "high")
+      change(@builder, name: "Made-up renamed", model: "claude-opus-5-5", enabled: true)
+      change(claimant, model: "claude-opus-5-5", effort: "high")
     end
 
     assert_empty calls

@@ -7,7 +7,7 @@ module V1
     # A command checks its body against the contract's schema (400
     # malformed, 422 invalid), then its path id (404), and then runs the
     # entry with the body and the id as params (IN-13). Prompt issuance
-    # carries the new seat token and prompt text in its first answer.
+    # carries the new seat token and prompt text in its first answer before the seat lands.
     class SeatsController < ApplicationController
       include AuthenticatesOwner
       include RunsCommands
@@ -34,7 +34,7 @@ module V1
 
       # The owner's seat controls of milestone 3 (plan HE-27): pause and
       # resume a seat, and change its name, model, effort, strength rank,
-      # login, role or whether it is on.
+      # login, role, permissions or whether it is on.
       def pause = control("pause_seat")
       def resume = control("resume_seat")
       def change = control("change_seat")
