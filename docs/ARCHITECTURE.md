@@ -951,15 +951,20 @@ task reached Done with a stand-in reviewer.
 A job's run also passes the seat's model and effort when the seat sets
 them (`--model` and `--effort` for Claude and Antigravity, `-m` for Codex
 and Grok), at the `help` level: every check that has run so far ran with
-no model set, so these flags have never run in check mode. A prompt over
-512 KiB is not started, because a tool gets its prompt as one argument and
-the Mac starts no program whose arguments pass 1 MiB. The runner then
-starts no tool, logs the reason and sends no result, so a check ends in
-`error` after its two run timeouts, and a draft is dropped after its
-second. The server's length limits on task text make that rare, not
-impossible: they count characters, not bytes, and not the evidence rows a
-task gathers, so a large enough task, with many evidence rows or text in
-multibyte characters, still makes its checks end in `error`.
+no model set, so these flags have never run in check mode.
+
+No tool run of any kind is started with a prompt over 512 KiB, because a
+tool gets its prompt as one argument and the Mac starts no program whose
+arguments pass 1 MiB. The runner then starts no tool and logs the reason
+with both sizes. For a job it sends no result, so a check ends in `error`
+after its two run timeouts, and a draft is dropped after its second. For
+a build, a review or an outward action it counts a failed tool run and
+gives the work back, and three in a row end the runner with code 4. The
+server's length limits on task text make that rare, not impossible: they
+count characters, not bytes, and not the evidence rows and review notes
+a task gathers, so a large enough task, with many evidence rows or text
+in multibyte characters, still makes its checks end in `error` and
+cannot be built or reviewed by a runner.
 
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.

@@ -328,6 +328,38 @@ struct DriverTests {
         #expect(argv.dropFirst(index + 1).first == "60s")
     }
 
+    // A tool gets its prompt as one argument, and the Mac starts no program
+    // whose arguments pass 1 MiB: every run refuses a longer prompt itself.
+    @Test("a prompt over the byte limit starts no tool, for a build, a review and a check",
+          arguments: [ToolPurpose.build, .review, .check])
+    func promptOverTheLimit(purpose: ToolPurpose) async throws {
+        let setup = try Setup()
+        let test = Self.cases[0]
+        try setup.signIn(test)
+        // Two bytes a character: the limit counts bytes, not characters.
+        let prompt = String(repeating: "é", count: JobToolRun.promptByteLimit / 2 + 1)
+        let ran = try await setup.driver(test).execute(prompt: prompt, in: setup.work, purpose: purpose)
+
+        guard case .failed(.couldNotStart(let reason), nil) = ran else {
+            Issue.record("expected the run not to start, got \(ran)")
+            return
+        }
+        #expect(reason.contains("\(JobToolRun.promptByteLimit + 2) bytes"))
+        #expect(reason.contains("\(JobToolRun.promptByteLimit)"))
+        #expect(try setup.tools.calls().isEmpty, "the stand-in was never started")
+    }
+
+    @Test("a prompt of exactly the byte limit starts the tool")
+    func promptAtTheLimit() async throws {
+        let setup = try Setup()
+        let test = Self.cases[0]
+        try setup.signIn(test)
+        let prompt = String(repeating: "d", count: JobToolRun.promptByteLimit)
+        _ = try await setup.driver(test).execute(prompt: prompt, in: setup.work, purpose: .check)
+
+        #expect(try setup.tools.calls().count == 1)
+    }
+
     @Test("the provider's shape is chosen by the provider")
     func shapes() {
         #expect(ProviderShapes.shape(for: .claude) is ClaudeDriver)

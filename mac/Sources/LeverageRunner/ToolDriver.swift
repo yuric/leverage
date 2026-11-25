@@ -210,8 +210,28 @@ struct ProcessToolDriver: ToolDriver {
         self.shape = shape
     }
 
+    /// The most bytes of prompt a tool run is started with, whatever it is
+    /// for. A tool gets the prompt as one argument, and the Mac refuses to
+    /// start a program whose arguments and environment pass `ARG_MAX`
+    /// (1 MiB): a prompt over this limit would fail to start every time
+    /// (milestone 4 review, finding 9). The server's limits on task text
+    /// make such a prompt rare, not impossible: they count characters, not
+    /// bytes, and not the evidence rows and review notes a task gathers.
+    static let promptByteLimit = 512 * 1024
+
+    /// Why the prompt is not run, or nil when it fits.
+    static func tooLong(_ prompt: String) -> String? {
+        let bytes = prompt.utf8.count
+        guard bytes > promptByteLimit else { return nil }
+        return "the prompt is \(bytes) bytes, over the \(promptByteLimit) a tool's argument may hold"
+    }
+
     func execute(_ request: ToolRunRequest) async throws -> ToolRun {
         let prompt = request.prompt, folder = request.folder, purpose = request.purpose
+        // Refused here, with a reason that names the sizes, where the Mac
+        // would only answer `E2BIG`. A build, a review and an outward
+        // action reach this check; a job asks first (`JobToolRun`).
+        if let reason = Self.tooLong(prompt) { return .failed(.couldNotStart(reason), nil) }
         // Codex writes its last message to a file of its own, kept outside the
         // work folder and removed after the run.
         var scratch: URL?
