@@ -60,8 +60,8 @@ module Leverage
         end
 
         def builder_availability
-          return "builder_holds_task" if Finishing.builder_holds_task?(@task)
-          return "builder_free" if Finishing.builder_free?(@task)
+          return "builder_holds_task" if @builder && Permissions.builds?(@builder) && Finishing.builder_holds_task?(@task)
+          return "builder_free" if Finishing.builder_free?(@task, lease: :task)
 
           "builder_busy"
         end

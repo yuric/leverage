@@ -29,6 +29,7 @@ module Leverage
     # kind - :task or :review.
     def may_claim?(seat, kind, at: Time.current, task: nil)
       return false unless seat && seat.enabled && !seat.paused && seat.removed_at.nil?
+      return false unless kind == :review ? Permissions.works?(seat) : Permissions.builds?(seat)
       return false unless Roles.acts_as?(seat.role, kind == :review ? "reviewer" : "builder")
       return claim_standing?(seat, task) && momentary?(seat, task, at: at) if task
       return false unless idle_for_claim?(seat, at: at)
@@ -49,6 +50,7 @@ module Leverage
     # A claim also needs the seat and the task to be free now. The gating
     # filter includes projects that reached their budget while the rule is on.
     def momentary?(seat, task, at:, excluded_task_ids: nil)
+      return false unless Permissions.builds?(seat)
       return false if seat.paused || !idle_for_claim?(seat, at: at)
       return false if task.holder_seat_id || on_hold?(task) || PendingTransitions.of(task)
       return false if task.project_id && Project.exists?(id: task.project_id, paused: true)
@@ -68,7 +70,7 @@ module Leverage
     end
 
     def builder_at_rank?(seat, rank)
-      seat&.enabled && seat.removed_at.nil? && Roles.acts_as?(seat.role, "builder") &&
+      seat&.enabled && Permissions.builds?(seat) && seat.removed_at.nil? && Roles.acts_as?(seat.role, "builder") &&
         (!rank || seat.strength_rank >= rank)
     end
 
@@ -161,6 +163,7 @@ module Leverage
     # always yes while the rule is off.
     def may_review?(seat, review, at: Time.current)
       return false unless seat && Roles.acts_as?(seat.role, "reviewer") && seat.enabled && !seat.paused && seat.removed_at.nil?
+      return false unless Permissions.works?(seat)
       return false if built_by(seat).where(task_id: review.task_id).exists?
       return Gating.provider_allowed?(task_id: review.task_id, provider: seat.provider) unless seat.credential_id
 
@@ -222,6 +225,10 @@ module Leverage
       return "task_cancelled" if reviewed_when_cancelled?(review, seat)
 
       "not_holder"
+    end
+
+    def rework_free?(seat, task, at:)
+      seat && Permissions.builds?(seat) && builder_free?(seat, task, at: at)
     end
 
     def holds_anything?(seat, at: Time.current)

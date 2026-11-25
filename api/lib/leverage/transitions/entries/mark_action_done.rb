@@ -31,7 +31,7 @@ module Leverage
         def perform(ctx)
           last = Actions.last_open?(@action)
           Actions.mark_done(ctx, @action)
-          lease_seat_id = @task.builder_seat_id if !last && Actions.approvals_complete?(@task) && Finishing.builder_free?(@task)
+          lease_seat_id = @task.builder_seat_id if !last && Actions.approvals_complete?(@task) && Finishing.builder_free?(@task, lease: :action)
 
           closed = nil
           Holds.close(ctx, hold: @hold, task: @task, choice: "mark_done", lease_seat_id: lease_seat_id) do |event|

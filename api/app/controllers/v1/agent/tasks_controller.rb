@@ -2,6 +2,7 @@ module V1
   module Agent
     # The agent's task calls. The briefing is a read.
     class TasksController < BaseController
+      def create = run("create_task", "add_task")
       def claim_next = run("claim_next_task", "claim")
       def acknowledge_briefing = run("acknowledge_task_briefing", "acknowledge_briefing", ids: [ :id ])
       def heartbeat = run("heartbeat_task", "heartbeat", ids: [ :id ])

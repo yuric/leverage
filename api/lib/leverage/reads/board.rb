@@ -67,7 +67,7 @@ module Leverage
 
       # The workspace-wide fallback for cards without an unassigned review.
       def reviewer_seat?(workspace_id)
-        Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as("reviewer"), removed_at: nil).exists?
+        Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as("reviewer"), may_work: true, removed_at: nil).exists?
       end
 
       # The Needs you items as the contract has them, each with the seq of its
@@ -198,7 +198,7 @@ module Leverage
         end
 
         def seats(workspace_id, role)
-          Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as(role), enabled: true, paused: false, removed_at: nil)
+          Seat.where(workspace_id: workspace_id, role: Roles.roles_acting_as(role), enabled: true, paused: false, may_work: true, removed_at: nil)
             .order(:created_at, :id).to_a
         end
 
