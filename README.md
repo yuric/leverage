@@ -74,6 +74,10 @@ automated checks. Contributors may use AI tools too, under the
 Leverage is created and maintained by Yuri ([@yuric](https://github.com/yuric))
 and its contributors, listed in [AUTHORS](AUTHORS).
 
+Codex, Grok, Claude, Gemini and the other provider names in this
+repository belong to their respective owners. Leverage is an independent
+project and is not affiliated with or endorsed by them.
+
 ## License
 
 [MIT](LICENSE) © 2026 Leverage contributors.

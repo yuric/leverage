@@ -24,6 +24,15 @@ test('the Handoff section says how far handoff is proven and labels its diagram'
   assert.match(block(/<div class="handoff-header">[\s\S]*?<\/button>/), /class="demo-label">Illustration</)
 })
 
+test('the footer says Leverage is not affiliated with any provider the page names', () => {
+  const footer = block(/<footer class="site-footer">[\s\S]*?<\/footer>/)
+  assert.match(footer, /not affiliated with or endorsed by/)
+  const providers = [...block(/<ul aria-label="Example agent providers">[\s\S]*?<\/ul>/)
+    .matchAll(/<\/span>\s*([^<]+?)\s*<\/li>/g)].map(([, name]) => name)
+  assert.ok(providers.length > 0)
+  providers.forEach((name) => assert.match(footer, new RegExp(`\\b${name}\\b`)))
+})
+
 const fields = ['title', 'brief', 'check', 'delivery']
 
 function fixture() {
