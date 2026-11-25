@@ -1359,7 +1359,9 @@ task. PRD places are named by their section.
 - **UX-5** `[shape]` The catalog changes by a pull request that edits
   `models.json` with the entry's evidence and date and regenerates the
   Swift copy. `scripts/check_model_catalog.py` fails on an unlisted
-  evidence level, an empty source, a missing date, a `help` or `probe`
+  evidence level, an empty source, a missing date or one that is not a
+  calendar date, a `documented` fact whose source is not an `https://`
+  page address, a `help` or `probe`
   fact whose source is not a file in the repository, efforts not
   documented, an id or an effort listed twice, a default not among the
   models, a provider that is not a login provider, or a missing provider.

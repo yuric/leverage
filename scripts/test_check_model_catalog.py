@@ -78,6 +78,15 @@ def cases(models):
     def no_date(m):
         del first_model(m, "claude")["checked_on"]
 
+    def impossible_date(m):
+        first_model(m, "claude")["checked_on"] = "2026-13-45"
+
+    def documented_without_address(m):
+        first_model(m, "claude")["source"] = "trust me"
+
+    def documented_over_http(m):
+        first_model(m, "claude")["source"] = "http://example.com/models"
+
     def help_without_path(m):
         entry = first_model(m, "codex")
         entry["evidence"] = "help"
@@ -119,6 +128,9 @@ def cases(models):
         ("an evidence level outside the list", unknown_level, ["claude", "unverified"]),
         ("an empty source", empty_source, ["claude", "source"]),
         ("a missing date", no_date, ["claude", "checked_on"]),
+        ("a date that is no calendar date", impossible_date, ["claude", "checked_on"]),
+        ("a documented source that is no address", documented_without_address, ["claude", "documented", "address"]),
+        ("a documented source that is not https", documented_over_http, ["claude", "documented", "address"]),
         ("a help entry citing no repository path", help_without_path, ["codex", "help", "repository"]),
         ("a help entry citing a path that does not exist", help_with_missing_path, ["codex", "docs/no-such-file.md"]),
         ("efforts with help evidence", efforts_from_help, ["claude", "efforts", "documented"]),

@@ -8,7 +8,9 @@ never invented: each says how it is known. This check fails on
 
   * an evidence level outside the catalog's evidence_levels, or a catalog
     without them;
-  * an empty source or a missing or malformed date (checked_on);
+  * an empty source, or a missing date (checked_on) or one that is not a
+    calendar date in the form YYYY-MM-DD;
+  * a documented fact whose source is not a page address (https://);
   * a help or probe fact whose source is not a path to a file in the
     repository (a recorded reply, a probe, or a saved --help output);
   * efforts whose evidence is not documented (a tool's --help lists efforts
@@ -27,6 +29,7 @@ Standard library only; exits 0 when the catalog holds, 1 otherwise.
 """
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -45,15 +48,27 @@ def fact_problems(where, fact, levels, root):
     source = fact.get("source")
     if not isinstance(source, str) or not source.strip():
         problems.append(f"{where}: the source is empty")
+    elif evidence == "documented" and not source.startswith("https://"):
+        problems.append(f"{where}: a documented fact must cite a page address (https://), not {source!r}")
     elif evidence in RECORDED:
         path = source.split("#", 1)[0]
         if "://" in source or path.startswith("/") or ".." in Path(path).parts:
             problems.append(f"{where}: a {evidence} fact must cite a repository path, not {source!r}")
         elif not (root / path).is_file():
             problems.append(f"{where}: {path} is not a file in the repository ({evidence} evidence)")
-    if not DATE.match(str(fact.get("checked_on", ""))):
+    if not is_date(fact.get("checked_on")):
         problems.append(f"{where}: checked_on is missing or not a date")
     return problems
+
+
+def is_date(value):
+    if not isinstance(value, str) or not DATE.match(value):
+        return False
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def check(models, registry, root):
