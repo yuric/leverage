@@ -31,8 +31,10 @@ final class ProjectDetailModel {
         SpendingAmount.fieldText(project?.budget, locale: projects.locale)
     }
 
+    /// Not for the Imaginarium project: the gallery sends its tasks there,
+    /// and nothing makes that project again once its content is gone.
     var canDeleteContent: Bool {
-        guard let project else { return false }
+        guard let project, !project.imaginarium else { return false }
         return project.contentDeletedAt == nil && project.openTasks == 0
     }
 

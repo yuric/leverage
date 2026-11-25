@@ -12,10 +12,10 @@ struct ProjectsModelTests {
 
     nonisolated private static func project(
         budget: Decimal? = 20, spent: Decimal = 2.5, paused: Bool = false,
-        openTasks: Int = 0, deleted: Bool = false, brief: [BriefEntry] = []
+        openTasks: Int = 0, deleted: Bool = false, brief: [BriefEntry] = [], imaginarium: Bool = false
     ) -> Project {
         Project(
-            id: projectID, name: deleted ? "" : "Sample project", goal: "Collect examples",
+            id: projectID, name: deleted ? "" : "Sample project", imaginarium: imaginarium, goal: "Collect examples",
             budget: budget, spent: spent, paused: paused, briefVersion: 1, brief: brief,
             pausedBy: paused ? .owner : nil, openTasks: openTasks, contentDeletedAt: deleted ? Date() : nil)
     }
@@ -163,6 +163,16 @@ struct ProjectsModelTests {
         #expect(!detail.canDeleteContent)
         #expect(!(await detail.deleteContent()))
         #expect(owner.calls.filter { $0.operation == .deleteProjectContent }.count == 1)
+    }
+
+    @Test("the Imaginarium project's content is never offered for deletion: the gallery sends its tasks there")
+    func imaginariumKeepsContent() async {
+        let (owner, _, projects) = model(startingWith: [Self.project(imaginarium: true)])
+        await projects.load()
+        let detail = ProjectDetailModel(projectID: Self.projectID, projects: projects)
+        #expect(!detail.canDeleteContent)
+        #expect(!(await detail.deleteContent()))
+        #expect(owner.calls.allSatisfy { $0.operation != .deleteProjectContent })
     }
 
     @Test("a project or task update on the shared feed refreshes the list")
