@@ -224,6 +224,8 @@ once it makes its first release.
 
 ### Changed
 
+- The README describes how Leverage coordinates AI agents on the Mac and
+  keeps tasks moving through provider interruptions.
 - The left pane's Rules tab holds rules and workspace settings. Leverage
   Settings (⌘ ,) offers Same as this Mac, Light and Dark. Provider login
   rows are labeled Login.

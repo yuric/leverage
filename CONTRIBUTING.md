@@ -10,9 +10,9 @@ are best effort, and the project's scope is deliberately narrow.
 
 ## Where the project is
 
-Leverage is in its definition phase: the requirements in
-[docs/PRD.md](docs/PRD.md) are being written and there is no product code yet. Right
-now the most valuable contributions are:
+Leverage is in development. The requirements are in [the PRD](docs/PRD.md)
+and [Implementation progress](docs/IMPLEMENTATION.md) shows what has been
+built. Useful contributions include:
 
 - feedback on a requirement, or a requirement that is missing;
 - questions that expose an ambiguity;

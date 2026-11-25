@@ -1,8 +1,13 @@
 # Leverage
 
-> **Status: in development.** The Mac app takes work from a task form to
-> Done with connected agents. See [Implementation progress](docs/IMPLEMENTATION.md)
-> for the milestones and what each check proved.
+Leverage is a Mac app for coordinating AI agents from multiple providers
+without opening a terminal. Connect provider accounts and add a task in a
+form, and Leverage can keep work moving when a provider hits a limit or a
+login expires.
+
+> **Status: in development.** See
+> [Implementation progress](docs/IMPLEMENTATION.md) for the milestones
+> and what each check proved.
 
 Leverage is an open source project that is being specified in the open. The
 requirements are written first, in [docs/PRD.md](docs/PRD.md); architecture,
