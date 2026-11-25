@@ -7,6 +7,31 @@ which are the design reference for the requirements in
 The maintainer accepted the proposal on 24 November 2026. Its requirements
 now live only in [docs/PRD.md](../PRD.md), with `FR-` IDs.
 
+## Interactive preview
+
+Open [the subscription preview](preview/index.html) in a browser. It works
+offline with sample data and does not ask for an account or payment details.
+Reset preview returns to the plan list and clears the session.
+
+1. Choose Pro, Starter or Plus. Continue to checkout, then open the
+   simulated Stripe page. Try a sample payment, a decline, or cancellation.
+2. On an active subscription, view a sample receipt, update the payment
+   method, and try an immediate or scheduled change in Change plan.
+3. Simulate a failed renewal. Check the account row, the Subscription
+   banner, and the single Needs you item. The sample task stays in progress.
+   Save a sample payment method and simulate a successful retry to clear the
+   failure and see a new receipt.
+4. Cancel from an active subscription to see the end date and the retained
+   receipts. Use Appearance to check the same flow in Light and Dark.
+
+Dates and plan-change timings are preview examples. Plan inclusions and
+support details are marked pending. The preview keeps all state in memory.
+The [billing handoff](billing-handoff.md) covers the Stripe setup, service
+boundary, owner decisions and sandbox acceptance checks.
+
+Run the mock model tests from the repository root with
+`node --test docs/subscription/preview/mock-billing.test.cjs`.
+
 ## The mockups
 
 [`mockups.html`](mockups.html) is a self-contained page with every screen

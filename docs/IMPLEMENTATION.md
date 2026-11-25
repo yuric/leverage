@@ -1003,6 +1003,14 @@ The account row and menu are the second item in the
 They use the owner's existing session, Settings window and sign-out
 action. The next step concerns the subscription service.
 
+### Subscription preview
+
+The [offline subscription preview](subscription/README.md#interactive-preview)
+exercises checkout and management with sample data while billing setup is
+pending. The [billing handoff](subscription/billing-handoff.md) lists the
+configuration and sandbox checks for the service. Steps 3 and 4 still depend
+on the [subscription decisions](PRD.md#open-decisions).
+
 ## What the Rule checks milestone proves, and how far
 
 - **The rules work end to end with stand-in tools.**

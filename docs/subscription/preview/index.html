@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; form-action 'none'; base-uri 'none'">
+  <title>Leverage subscription preview</title>
+  <link rel="stylesheet" href="preview.css">
+  <script src="mock-billing.js" defer></script>
+  <script src="preview.js" defer></script>
+</head>
+<body data-theme="system">
+  <div class="page">
+    <header class="preview-header">
+      <div>
+        <h1>Subscription preview</h1>
+        <p>Sample data. No charges.</p>
+      </div>
+      <div class="preview-controls">
+        <label for="appearance">Appearance</label>
+        <select id="appearance">
+          <option value="system">Same as this Mac</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+        <button type="button" data-action="reset">Reset preview</button>
+      </div>
+    </header>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Leverage">
+        <div class="brand"><span class="app-icon" aria-hidden="true"></span>Leverage</div>
+        <nav class="navigation" aria-label="Workspace">
+          <button type="button" data-action="board"><span class="nav-icon board-icon" aria-hidden="true"></span>Task board</button>
+          <button type="button" data-action="needs"><span class="nav-icon inbox-icon" aria-hidden="true"></span>Needs you <span class="count" id="needs-count" hidden>1</span></button>
+        </nav>
+        <div class="account-area">
+          <p class="health"><span aria-hidden="true"></span>System is running</p>
+          <div class="account-menu" id="account-menu" hidden>
+            <div class="menu-header"><strong>name@example.com</strong><span id="menu-plan"></span></div>
+            <button type="button" data-action="subscription">Subscription</button>
+            <button type="button" data-action="settings">Settings <kbd>⌘ ,</kbd></button>
+            <button type="button" data-action="signout">Sign out</button>
+          </div>
+          <button type="button" class="account" id="account-button" data-action="menu" aria-expanded="false" aria-controls="account-menu">
+            <span class="avatar" aria-hidden="true">N</span>
+            <span class="identity"><strong>name@example.com</strong><span id="account-plan">No subscription</span></span>
+            <span class="account-arrow" aria-hidden="true">⌃</span>
+          </button>
+        </div>
+      </aside>
+      <main id="workspace" tabindex="-1"></main>
+    </div>
+  </div>
+  <p class="sr-only" role="status" id="announcement"></p>
+  <dialog id="flow" aria-labelledby="flow-title"><div class="dialog-content" id="flow-content"></div></dialog>
+  <noscript><p class="noscript">Enable JavaScript to use the offline preview.</p></noscript>
+</body>
+</html>
