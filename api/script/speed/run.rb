@@ -4,7 +4,8 @@
 # tasks that were put in Ready beforehand, over HTTP, for 120 seconds,
 # heartbeating every 2 seconds, their ticks spread evenly over those 2
 # seconds (Speed.seat_starts). scripts/speed_run.sh runs it in a
-# container of the compose network (the API is http://api:3000 there);
+# container of the compose network (the API is http://api:3000 there, and
+# every call names loopback as its Host, the only host production answers);
 # scripts/speed_report.py then reads the API's command lines.
 #
 # It loads nothing of the application: only Ruby's standard library. The
@@ -86,6 +87,10 @@ module Speed
       path = template.gsub(/\{([a-z_]+)\}/) { ids.fetch(Regexp.last_match(1)) }
       path += "?#{URI.encode_www_form(query)}" if query
       request = (method == "GET" ? Net::HTTP::Get : Net::HTTP::Post).new(path)
+      # In production the API answers only a request addressed to loopback
+      # (config.hosts). The driver reaches it by its compose name, so it
+      # names loopback as the host itself; Net::HTTP keeps a Host it is given.
+      request["Host"] = "127.0.0.1:#{@uri.port}"
       request["Authorization"] = "Bearer #{@token}" if @token
       request["Idempotency-Key"] = "speed-#{SecureRandom.hex(10)}" if method == "POST"
       if body

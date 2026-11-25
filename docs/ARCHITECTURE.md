@@ -1013,9 +1013,12 @@ the server. Security review starts here; see [SECURITY.md](../SECURITY.md).
 - **Network.** `compose.yaml` publishes the API on `127.0.0.1` only, and
   every Mac-side program calls it over plain HTTP. Nothing else on the
   network can reach it. In production the API answers only a request
-  addressed to `127.0.0.1`, `localhost`, `[::1]` or `api`
-  (`config.hosts`), so a web page in the owner's browser that rebinds its
-  own name to the loopback address is refused `403`. Before the server leaves the Mac the transport
+  addressed to `127.0.0.1`, `localhost` or `[::1]` (`config.hosts`), so a
+  web page in the owner's browser that rebinds its own name to the
+  loopback address is refused `403`. No name that the network's resolver
+  answers is on the list, the compose service name `api` included; the
+  speed run's driver reaches the API by that name and sends a loopback
+  `Host`. Before the server leaves the Mac the transport
   must become HTTPS ([ADR 0006](adr/0006-owner-sign-in-and-tokens.md));
   `Configuration` already accepts an `https` address.
 - **Callers and their tokens.** Three callers reach the server, each with

@@ -60,11 +60,14 @@ Rails.application.configure do
 
   # DNS rebinding protection (PRD, Security): the API answers only a
   # request addressed to this Mac's loopback, the address the app, the
-  # helper and the runners use, or to the compose service name api, which
-  # the speed run uses inside the compose network. A web page that rebinds
-  # its own name to 127.0.0.1 sends that name as Host and is refused 403
-  # before any controller runs. Rails compares the host without its port.
-  config.hosts = [ "127.0.0.1", "localhost", "[::1]", "api" ]
+  # helper and the runners use. A web page that rebinds its own name to
+  # 127.0.0.1 sends that name as Host and is refused 403 before any
+  # controller runs. Rails compares the host without its port. No other
+  # name belongs here, the compose service name api included: a name the
+  # network's resolver answers can be pointed at loopback by whoever
+  # controls that resolver. The speed run's driver reaches the API by that
+  # name and sends a loopback Host (script/speed/run.rb).
+  config.hosts = [ "127.0.0.1", "localhost", "[::1]" ]
 
   # The compose health check asks /up, whatever the Host.
   config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
