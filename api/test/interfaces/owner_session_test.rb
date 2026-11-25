@@ -208,12 +208,15 @@ class OwnerSessionTest < ActionDispatch::IntegrationTest
   end
 
   test "a NUL character in setup's body is 422 invalid before any owner exists, and makes none" do
+    # Committed tests of other files may have left workspaces behind.
+    workspaces = Workspace.count
+
     create_owner(email: "ow\u0000ner@example.test")
     assert_transport_error(:unprocessable_entity, "invalid")
     create_owner(password: "made-up-\u0000password")
     assert_transport_error(:unprocessable_entity, "invalid")
 
-    assert_equal [ 0, 0 ], [ User.count, Workspace.count ]
+    assert_equal [ 0, workspaces ], [ User.count, Workspace.count ]
   end
 
   test "two sign-ins that differ only in the password store the same request hash, which leaves the password out" do
