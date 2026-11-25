@@ -318,12 +318,21 @@ in the app. `bin/restore` runs in the `backup` service, which has the
 folder and the database's owner role. It refuses to replace a database
 whose log holds an event unless given `--replace`; otherwise it checks
 that `pg_restore` can read the dump, restores it into a new database
-beside the one it replaces (`<name>_restoring_<hex>`), gives the database
+beside the one it replaces (`<name>_restoring_<hex>`), runs there the
+migrations the dump has not seen, gives the database
 roles their rights again (`db:grants`) and runs the replay test
 (`leverage:verify_log`) there, and only then drops the database and gives
 the new one its name. A dump that cannot be restored, or whose log fails
 the replay test, or a database that cannot be dropped, leaves the database
-as it was and removes the new one. If the database was dropped and the
+as it was and removes the new one.
+
+A dump carries the schema of the version that made it. One made by an
+earlier version is therefore brought to this version's schema in the new
+database before the replay test, so the dumps kept from before an upgrade
+stay restorable with the same command; a migration that fails there is a
+failed step like any other. A dump made by a later version than the image
+that runs `bin/restore` is refused, with a message that says so: restore
+it with that version. If the database was dropped and the
 new one could not take its name, the message names the new one, to rename
 by hand. It exits 0 only when every
 step passed, 1 when it refused or a step failed (its message says which),

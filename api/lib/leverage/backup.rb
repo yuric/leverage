@@ -25,7 +25,11 @@ module Leverage
   # staging database beside it, runs pg_restore into that with no
   # --create and no --clean, and with --no-owner (pg_dump ignores
   # --no-owner for an archive format, so the dump keeps each object's
-  # owner and the restore drops it: a new cluster may lack that role), gives the roles their rights again
+  # owner and the restore drops it: a new cluster may lack that role),
+  # runs there the migrations the dump has not seen (a dump carries the
+  # schema of the day it was made, and the replay test reads today's; a
+  # dump that names a migration this version does not have is refused),
+  # gives the roles their rights again
   # (db:grants: a dump of one database holds no role) and runs
   # leverage:verify_log there. Only then is the database dropped and the
   # staging database renamed to its name, so a dump that cannot be
@@ -186,9 +190,11 @@ module Leverage
       target
     end
 
-    # Makes staging from the dump, gives the roles their rights and runs
-    # the replay test there. On any failure, of whatever kind, staging is
-    # dropped, the target was never touched, and the error is a Failed.
+    # Makes staging from the dump, brings its schema to this version's,
+    # gives the roles their rights (after the migrations, so that a table
+    # they add has its own) and runs the replay test there. On any
+    # failure, of whatever kind, staging is dropped, the target was never
+    # touched, and the error is a Failed.
     def restore_into(staging, file, workspace_id, spawner)
       tool!(staging, spawner, "createdb", *staging.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
         staging.database)
@@ -196,6 +202,7 @@ module Leverage
         file)
       connected_to(staging) do
         load_tasks
+        migrate!
         DbGrants.apply(ActiveRecord::Base.lease_connection)
         verify!(workspace_id)
       end
@@ -323,6 +330,28 @@ module Leverage
       ensure
         ActiveRecord::Base.establish_connection(original)
       end
+    end
+
+    # Runs, on the database now connected, every migration its
+    # schema_migrations does not name, as the owner role: what the server's
+    # db:prepare would do at its next start, done here so that the replay
+    # test reads the columns it expects. Nothing to run when the dump is of
+    # this version. A dump that names a migration this version does not
+    # have was made by a later one, whose log this code cannot vouch for
+    # and whose schema no migration here takes back: it is refused. No
+    # schema file is written.
+    def migrate!
+      pool = ActiveRecord::Base.connection_pool
+      context = ActiveRecord::MigrationContext.new(Rails.application.paths["db/migrate"].existent,
+        pool.schema_migration, pool.internal_metadata)
+      unknown = context.get_all_versions - context.migrations.map(&:version)
+      unless unknown.empty?
+        raise Failed, "the dump was made by a later version of Leverage than this one (it names the " \
+                      "migration #{unknown.max}, which this version does not have). Restore it with that version."
+      end
+
+      context.migrate
+      ActiveRecord::Base.descendants.each(&:reset_column_information)
     end
 
     def verify!(workspace_id)

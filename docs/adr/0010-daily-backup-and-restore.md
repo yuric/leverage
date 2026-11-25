@@ -95,6 +95,13 @@ milestone's plan HB-1 to HB-8.
 - `pg_dump` keeps each object's owner in a custom-format archive even with
   `--no-owner`; the restore's `--no-owner` drops them, and the archive
   holds no `GRANT` or `REVOKE`.
+- A dump carries the schema of the version that made it, and the replay
+  test reads this version's. Between `pg_restore` and `db:grants` the
+  restore therefore runs, in the staging database, the migrations the
+  dump has not seen, and refuses a dump that names a migration this
+  version does not have (one made by a later version). Without that step
+  no dump made before the newest migration could be restored by
+  `bin/restore`.
 - After a restore, tokens issued after the dump no longer match: the app
   issues the helper a new token at its next start, and the owner verifies
   each account and signs in again where needed (HB-7).
