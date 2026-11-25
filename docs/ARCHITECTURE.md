@@ -93,7 +93,9 @@ A product source file is a source file outside `docs/`, `scripts/`,
      approve their own pull request. The maintainer reads them before
      merging.
 
-Dependabot pull requests are exempt from the "Architecture rules" section,
+Dependabot proposes updates for the actions, the API's gems and its two
+pinned container images ([.github/dependabot.yml](../.github/dependabot.yml)).
+Its pull requests are exempt from the "Architecture rules" section,
 because Dependabot cannot fill it in. The checks on what the change adds still
 run on them, and with no answers there is no `N/A` to soften one. A bot's
 description is upstream release notes, so the IDs in it are not resolved.

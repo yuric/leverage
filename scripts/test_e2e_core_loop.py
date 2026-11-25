@@ -28,6 +28,7 @@ value is made up.
 """
 
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -428,6 +429,25 @@ class ContinuousIntegrationTests(unittest.TestCase):
     def test_no_step_is_skipped_because_its_script_is_missing(self):
         guards = CI.read_text(encoding="utf-8").count("hashFiles(")
         self.assertEqual(guards, 0, f"{guards} steps of ci.yml are skipped when their script is missing")
+
+    def test_dependabot_watches_every_pinned_manifest(self):
+        """Review: only the actions had an updater, so the locked gems and
+        the digest-pinned Ruby and PostgreSQL images went stale silently."""
+        text = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        entries = set(re.findall(
+            r'package-ecosystem:\s*"([^"]+)"\s*\n\s*directory:\s*"([^"]+)"', text))
+        manifests = {
+            ("github-actions", "/"): ".github/workflows",
+            ("bundler", "/api"): "api/Gemfile.lock",
+            ("docker", "/api"): "api/Dockerfile",
+            ("docker-compose", "/"): "compose.yaml",
+        }
+        for entry, manifest in manifests.items():
+            with self.subTest(manifest=manifest):
+                self.assertTrue((ROOT / manifest).exists(), manifest)
+                self.assertIn(entry, entries, f"no Dependabot entry for {manifest}")
+        self.assertEqual(text.count('prefix: "chore(deps)"'), len(entries),
+                         "every entry gives its pull requests the Conventional Commits title")
 
 
 if __name__ == "__main__":

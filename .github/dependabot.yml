@@ -1,16 +1,68 @@
 version: 2
+# Every entry proposes updates as pull requests, once a week, one pull
+# request per ecosystem. Nothing changes until one of them is merged.
+# commit-message.prefix gives pull request titles the Conventional Commits
+# form the "PR title" check requires, e.g. "chore(deps): bump …".
+#
+# A pull request that changes api/Gemfile.lock or api/Dockerfile needs the
+# maintainer to add an `AR-007: N/A — <reason>` line to its description
+# and to run "Rules compliance" again (docs/ARCHITECTURE.md). One that
+# changes an image digest also needs, in the same pull request, the digest
+# recorded in docs/adr/0002 updated, and for a Ruby version the files
+# api/Dockerfile names (.ruby-version and the ARG) as well.
 updates:
-  # Keeps the actions in .github/workflows up to date. They are pinned to
-  # commit SHAs, so nothing changes until one of these pull requests is merged.
+  # The actions in .github/workflows, pinned to commit SHAs.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     commit-message:
-      # Gives pull request titles the Conventional Commits form the "PR title"
-      # check requires, e.g. "chore(deps): bump actions/checkout from …".
       prefix: "chore(deps)"
     groups:
       actions:
+        patterns:
+          - "*"
+
+  # The API's gems, locked in api/Gemfile.lock.
+  - package-ecosystem: "bundler"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      gems:
+        patterns:
+          - "*"
+
+  # The API's base image, pinned by digest in api/Dockerfile. A new Ruby
+  # minor or major version is a decision (docs/adr/0002), not a bump.
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "ruby"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      api-image:
+        patterns:
+          - "*"
+
+  # The database image, pinned by digest in compose.yaml. A new PostgreSQL
+  # major version cannot open the existing data volume, so it is left out.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+    groups:
+      database-image:
         patterns:
           - "*"

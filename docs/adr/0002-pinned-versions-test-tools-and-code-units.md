@@ -81,5 +81,12 @@ GitHub's list of runner images, not taken from memory.
 - A new image digest arrives only through a pull request that changes the
   digest here and in `api/Dockerfile` or `compose.yaml`. The Debian
   packages can still change between two builds of the same commit.
+- Dependabot ([.github/dependabot.yml](../../.github/dependabot.yml))
+  proposes those pull requests once a week for the gems in
+  `api/Gemfile.lock`, the Ruby image in `api/Dockerfile` (patch versions
+  only) and the PostgreSQL image in `compose.yaml` (no new major version).
+  The maintainer completes an image pull request by updating the digest
+  here before merging. That is an update signal, not a scan: it does not
+  replace the security scanner left out above.
 - A new code unit, or a new direction between units, needs a change to the
   list and a new ADR.
