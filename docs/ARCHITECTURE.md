@@ -949,10 +949,12 @@ no model set, so these flags have never run in check mode. A prompt over
 the Mac starts no program whose arguments pass 1 MiB. The runner then
 starts no tool, logs the reason and sends no result, so a check ends in
 `error` after its two run timeouts, and a draft is dropped after its
-second. The server's length limits on task text make that rare, not
-impossible: they count characters, not bytes, and not the evidence rows a
-task gathers, so a large enough task, with many evidence rows or text in
-multibyte characters, still makes its checks end in `error`.
+second. The server's length limits on task text, and on the text of a
+question, its assumption, an answer and a project's brief, make that
+rare, not impossible: they count characters, not bytes, and not the
+evidence rows or the answered questions a task gathers, so a large enough
+task, with many evidence rows or text in multibyte characters, still
+makes its checks end in `error`.
 
 The test prompt of Claude, Codex and Antigravity answered "ready" under the
 allow-listed environment (`probe`); Grok was signed out, so no prompt ran.

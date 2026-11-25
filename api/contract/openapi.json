@@ -9731,10 +9731,12 @@
         "properties": {
           "text": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4000
           },
           "assumption": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 4000
           },
           "blocking": {
             "type": "boolean"
@@ -9760,7 +9762,8 @@
         "properties": {
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 2000
           }
         },
         "required": [
@@ -11180,7 +11183,8 @@
         "properties": {
           "answer": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 4000
           }
         },
         "required": [
@@ -11893,10 +11897,12 @@
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 300
           },
           "goal": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 4000
           },
           "budget": {
             "type": [
@@ -11922,6 +11928,7 @@
         "properties": {
           "entries": {
             "type": "array",
+            "maxItems": 100,
             "items": {
               "type": "object",
               "additionalProperties": false,
@@ -11936,7 +11943,8 @@
                 },
                 "text": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "maxLength": 4000
                 }
               },
               "required": [
