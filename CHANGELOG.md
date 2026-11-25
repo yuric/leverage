@@ -105,9 +105,10 @@ once it makes its first release.
   a rule's reason reaches a builder only as quoted material. The rule
   "Every task needs specific details" has its wording and an eval suite of
   24 cases, which Claude Code, Codex and Antigravity each passed at their
-  default model. The server's request log now keeps no text but ids. The
-  PRD gains the changes S-1 to S-14; the choices are recorded in ADRs 0011
-  to 0013. After an adversarial review of the milestone: a waiting submit
+  default model at the time. On the current cases Codex and Antigravity
+  pass, and Claude Code has not been run. The server's request log now
+  keeps no text but ids. The PRD gains the changes S-1 to S-14; the
+  choices are recorded in ADRs 0011 to 0013. After an adversarial review of the milestone: a waiting submit
   or pass completes when its rule is turned off, removed or saved; the
   re-run limit holds across a release; a check that cannot run while the
   orchestrator is online always opens its item, at once, beside another
