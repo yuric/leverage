@@ -41,6 +41,14 @@ require "json"
 # the usage timer and readings whose state, window and figures vary. The
 # earlier coverage walks keep their original draws and request mix.
 #
+# App round 2 (PRD Permissions) adds, behind `agents: true` so that the
+# earlier walks keep their draws: the owner changes a seat's permissions,
+# most often turning Deliver tasks off for a builder that holds a task, a
+# provisional claim or a pending submit, and turns them back on; any seat
+# adds a task with its contract (a creator seat's one call), with and
+# without held work; a seat reports its own model and effort; and the spare
+# builder connects with a drawn set of permissions.
+#
 # Every command goes through Transitions.apply, so the whole log of the
 # walk's workspace is made by the engine: the helper is made by
 # issue_helper_token, the logins by add_credential and the helper's passed
@@ -81,6 +89,7 @@ class Walk
     rename_credential: 2, remove_credential: 3, reorder_credentials: 3, refresh_usage: 2,
     report_reading: 6, usage_read_due: 2
   }.freeze
+  AGENT_ACTIONS = { change_permissions: 6, agent_add_task: 6, report_model: 2 }.freeze
   # The moments a custom rule is added at (RD-21, AP-1), and the verdicts an
   # orchestrator draws (nil: it answers none, and the job times out).
   # Submit and the pass are drawn twice as often: a task reaches them less
@@ -119,14 +128,17 @@ class Walk
 
   attr_reader :seed, :scenario, :log, :credential_step_problems
 
-  def initialize(seed:, steps: 60, credentials: false)
+  def initialize(seed:, steps: 60, credentials: false, agents: false)
     @seed = seed
     @random = Random.new(seed)
     @steps = steps
     @log = []
     @credential_step_problems = []
     @credentials = credentials
-    @actions = credentials ? ACTIONS.merge(CREDENTIAL_ACTIONS) : ACTIONS
+    @agents = agents
+    @actions = ACTIONS
+    @actions = @actions.merge(CREDENTIAL_ACTIONS) if credentials
+    @actions = @actions.merge(AGENT_ACTIONS) if agents
     @last = nil
     @count = 0
   end
@@ -147,7 +159,7 @@ class Walk
     @reviewers = [ connect("reviewer", 0, @logins[2]), connect("reviewer", 1, provider: "gemini") ]
     @orchestrator = connect("orchestrator", 0, chance(0.5) ? @logins[1] : nil)
     @planner = connect("planner", 0)
-    @spare = connect("builder", 3)
+    @spare = connect("builder", 3, permissions: (drawn_permissions if @agents))
     @builders << @spare
     draw_rules
     yield if block_given?
@@ -969,6 +981,58 @@ class Walk
     command(index, :change_seat, "change_seat", @owner, params)
   end
 
+  # --- permissions, a seat's Add task and its reported model (app round 2) ---
+
+  # The owner sets a seat's whole set of permissions (PRD Permissions): a
+  # seat with one off most often gets them all back, so that walks go on;
+  # a builder that holds a task, a provisional claim or a pending submit
+  # most often loses Deliver tasks, which gives the task back.
+  def change_permissions(index)
+    all = seats.each(&:reload)
+    limited = all.select { |seat| seat.removed_at.nil? && Leverage::Permissions.to_h(seat).value?(false) }
+    holders = @builders.select { |seat| held_by(seat) }
+    seat = one(limited) if limited.any? && chance(0.5)
+    seat ||= one(holders.any? && chance(0.6) ? holders : all)
+    set = if limited.include?(seat) && chance(0.7)
+      permission_set { true }
+    elsif holders.include?(seat) && chance(0.6)
+      drawn_permissions.merge("deliver" => false)
+    else
+      drawn_permissions
+    end
+    command(index, :change_permissions, "change_seat", @owner, "id" => seat.id, "permissions" => set)
+  end
+
+  def permission_set = Leverage::Contract.list("seat_permissions").to_h { |name| [ name, yield ] }
+
+  def drawn_permissions = permission_set { chance(0.75) }
+
+  # Any seat adds a task with its contract in one call (PRD Lifecycle: Add
+  # task, then Complete contract, as the seat). A seat that holds work
+  # names that work's project or none, and now and then another, which is
+  # 422; a seat without Create tasks, or turned off, is refused.
+  def agent_add_task(index)
+    return sweep(index) if tasks.size >= MAXIMUM_TASKS
+
+    seat = one(seats)
+    builds = Array.new(1 + @random.rand(2)) { |number| { "text" => "Made-up criterion #{number + 1}.", "kind" => "build" } }
+    command(index, :agent_add_task, "add_task", seat, "title" => "Made-up agent task #{index}",
+      "details" => "Made-up details.", "criteria" => builds + [ { "text" => "A reviewer agrees.", "kind" => "review" } ],
+      "priority" => one(%w[low normal high]), "work_reference" => nil, "project_id" => one([ nil, nil, *projects ])&.id)
+  end
+
+  # A seat reports its own model and effort (report_model): a seat that
+  # connects on its own, or now and then one the app runs, which is
+  # refused; an effort without a model is 422.
+  def report_model(index)
+    all = seats.each(&:reload)
+    seat = one(chance(0.15) ? all : all.reject(&:credential_id))
+    model = one(Leverage::ModelCatalog.models(seat.provider).first(2) + [ nil ])
+    effort = one(Leverage::ModelCatalog.efforts(seat.provider, model).first(2) + [ nil, nil ])
+    effort = "high" if model.nil? && chance(0.1)
+    command(index, :report_model, "change_seat", seat, "model" => model, "effort" => effort)
+  end
+
   # --- questions, approvals, projects and settings (milestone 5) ------------
 
   def holder_command(index)
@@ -1306,10 +1370,11 @@ class Walk
   # --- applying ---------------------------------------------------------------
 
   # A seat on a login (run by the app), or one that connects on its own.
-  def connect(role, index, login = nil, provider: "claude")
+  def connect(role, index, login = nil, provider: "claude", permissions: nil)
     params = { "name" => "Made-up #{role} #{index}", "role" => role, "provider" => login&.provider || provider,
                "model" => (Leverage::ModelCatalog.models(login.provider).first if login), "effort" => nil }
     params["credential_id"] = login.id if login
+    params["permissions"] = permissions if permissions
     Seat.find(setup("connect_seat", @owner, params).fetch("seat_id"))
   end
 

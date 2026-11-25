@@ -246,6 +246,15 @@ The App round 1 migration folds each task's old goal into its details
 before dropping the goal column. For the handling of empty or duplicate
 text, see [UI-1](../api/contract/decisions.md#app-round-1-ui).
 
+One migration changes rows and no table: it rebuilds, from the log, the
+steps of every task that began as an Imaginarium idea with its checks.
+Those steps were stored wrongly until the step tracker read the criteria
+that `task.created` lists, and the replay test
+(`leverage:verify_log`) now finds each such row. The migration runs once,
+when the updated server first starts, writes no event and leaves a
+database with no such task as it is. Run `leverage:verify_log` after the
+upgrade to see that the log passes.
+
 Each time the server starts, after the database is prepared,
 `bin/rails leverage:install_shipped_rules` writes the seven shipped rules
 of any workspace that has none. On upgrade it also moves an unchanged
@@ -312,7 +321,11 @@ that `pg_restore` can read the dump, restores it into a new database
 beside the one it replaces (`<name>_restoring_<hex>`), gives the database
 roles their rights again (`db:grants`) and runs the replay test
 (`leverage:verify_log`) there, and only then drops the database and gives
-the new one its name. A dump that cannot be restored, or whose log fails
+the new one its name. A dump made before the migration that rebuilt the
+steps of Imaginarium ideas (see
+[Where the log is](#where-the-log-is-and-what-destroys-it)) has the same
+repair in the new database, before the replay test; a later dump is tested
+as it is. A dump that cannot be restored, or whose log fails
 the replay test, or a database that cannot be dropped, leaves the database
 as it was and removes the new one. If the database was dropped and the
 new one could not take its name, the message names the new one, to rename

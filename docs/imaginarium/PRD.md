@@ -130,7 +130,10 @@ a separate file in the app bundle.
   should the task wait in Blocked with a Needs you item until an agent with an
   image tool connects?
 - **Renaming or deleting the project.** Proposal: the owner may rename the
-  Imaginarium project but not delete it.
+  Imaginarium project but not delete it. Until the owner answers, the
+  server refuses to delete that project's content, because nothing creates
+  another one and the gallery could then send no task; the content of its
+  Done and Cancelled tasks can still be deleted.
 - **The specific-details check.** Catalog prompts are written to pass it.
   Should it still run, at a model-check cost, on prompts the owner has not
   edited?

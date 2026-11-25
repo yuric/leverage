@@ -91,8 +91,11 @@ class StateTableFinishingOwnerTest < ActiveSupport::TestCase
       [ ACTIONS, :last_open? ] => ->(action) { @guard.include?("last_open_action") && action == @action },
       [ ACTIONS, :approvals_complete? ] => ->(task) { @guard.include?("approvals_complete") && task == @task },
       [ ACTIONS, :any_started? ] => ->(task) { @guard.include?("action_started") && task == @task },
-      [ FINISHING, :builder_free? ] => ->(task, lease:, at: Time.current) {
+      # at is required: every command asks on its own clock (ctx.at), never
+      # on the API process's.
+      [ FINISHING, :builder_free? ] => ->(task, lease:, at:) {
         assert_equal(@row.command == "return_for_rework" ? :task : :action, lease)
+        assert_kind_of Time, at
         @guard.include?("builder_free") && task == @task
       },
       [ FINISHING, :builder_holds_task? ] => ->(task) { @guard.include?("builder_holds_task") && task == @task },

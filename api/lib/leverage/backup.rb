@@ -187,8 +187,12 @@ module Leverage
     end
 
     # Makes staging from the dump, gives the roles their rights and runs
-    # the replay test there. On any failure, of whatever kind, staging is
-    # dropped, the target was never touched, and the error is a Failed.
+    # the replay test there. A dump made before the migration that rebuilt
+    # the steps of promoted Imaginarium ideas (StepRepair) has that repair
+    # first: the server's next start would run it anyway, and without it
+    # the replay test would refuse every such dump. On any failure, of
+    # whatever kind, staging is dropped, the target was never touched, and
+    # the error is a Failed.
     def restore_into(staging, file, workspace_id, spawner)
       tool!(staging, spawner, "createdb", *staging.connection_args, "--maintenance-db=#{MAINTENANCE_DATABASE}",
         staging.database)
@@ -197,6 +201,7 @@ module Leverage
       connected_to(staging) do
         load_tasks
         DbGrants.apply(ActiveRecord::Base.lease_connection)
+        StepRepair.call unless StepRepair.migrated?
         verify!(workspace_id)
       end
     rescue StandardError => error

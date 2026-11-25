@@ -134,8 +134,8 @@ An operation's `caller`:
 | `builder`, `reviewer` | A seat with that role, or a General seat (`roles.json` `acts_as`). |
 | `holder` | The task's holder (the builder with the lease, or the provisional claimant). |
 | `job_claimer` | A seat whose role claims jobs: the orchestrator claims rule checks, questions and approvals, the planner claims contract drafts, and a General seat claims all four. |
-| `job_holder` | The seat that claimed the job. |
-| `creator` | A seat whose permissions include Create tasks (UX-11). |
+| `job_holder` | The seat that claimed the job, while the owner has not turned it off (UX-13b). |
+| `creator` | An enabled seat whose permissions include Create tasks (UX-11, UX-13c). |
 | `owner` | The owner's signed-in session (`sign_in_owner` itself takes the sign-in identity instead). |
 | `helper` | The helper, with its own token. |
 | `public` | No sign-in: the infrastructure health check, and setup on a new installation (whether an owner exists, and creating it, which is allowed once). |
@@ -179,6 +179,10 @@ handles every listed version. Old events are never rewritten. Until the
 first release of Leverage no log holds an event a released build wrote, so
 a version may still change in place; each such change is recorded in
 [decisions.md](decisions.md) (DB-48 is the first, DB-49 the second).
+`task.created` is the one type with two versions: version 2 is the shape
+every task is written in, and version 1 is kept for the logs that hold it
+(DB-56). `EventLog.append` takes no version, and the golden traces hold
+only newest versions (`test/contract/traces_test.rb`).
 
 ## The event record
 
@@ -682,8 +686,10 @@ allows the recovery time ceiling to be cleared (AP-39).
   A reorder alone records the moved entries (AP-27, DB-41).
 - Complete contract and Edit contract close a budget hold when the new
   cap is empty or above the task's reported spending (AE-12). A report
-  opens no budget hold on a task the command just ended. Budget, cap and
-  spend requests accept at most 99,999,999.999999 dollars. A report whose
+  opens no budget hold on a task the command just ended. Budget and cap
+  requests accept at most 99,999,999.999999 dollars, the most a total
+  holds; one spend report (a cost report, a verdict or a job result)
+  carries at most 100,000 (DB-57). A report whose
   sum would overflow a task or project total returns `422 invalid`. The
   saved spend and its event use the same six-decimal precision. If a
   running gate's cost uses the capacity a waiting verdict needs, the
@@ -933,7 +939,8 @@ and every seat has three permissions. Its decisions are UX-1 to UX-16 in
   `deliver_turned_off`, the Needs you items `agent_task_incomplete` and
   `agent_tasks_at_limit`, the choices `complete_contract` and
   `draft_contract`, and the guards `seat_has_landed`,
-  `seat_has_not_landed` and `turns_deliver_off_holding_working_task`.
+  `seat_has_not_landed`, `turns_deliver_off_holding_working_task` and
+  `turns_deliver_off_with_pending_transition`.
   `task.released`, `inbox.opened` and `inbox.resolved` v1 gain the new
   values in place (DB-48's reasoning).
 - `openapi.json` gains `SeatPermissions` (on `Seat`, `ConnectSeatRequest`,
@@ -951,3 +958,44 @@ and every seat has three permissions. Its decisions are UX-1 to UX-16 in
 - Trace 25 has a seat add a task that waits on the model gate and reaches
   Ready, then one that fails the app gate and opens
   `agent_task_incomplete`.
+
+## What the Imaginarium gallery added
+
+The prompt gallery of the PRD's Imaginarium section (FR-030, FR-038,
+FR-039, FR-041). Its decisions are DB-53, DB-55 and DB-56 and the two
+entries under [Imaginarium gallery](decisions.md#imaginarium-gallery).
+
+- The registry gains the list `imaginarium_entries`, the ids of the
+  catalog's prompts. Add task refuses a source whose entry id is not in
+  it.
+- `openapi.json`: `AddTaskRequest` gains the optional `imaginarium`, an
+  `ImaginariumSource` with the catalog `entry_id` and `catalog_version`,
+  and `TaskSummary` gains `imaginarium_entry_id` and
+  `imaginarium_catalog_version`. A task with a source goes to the
+  workspace's Imaginarium project. An idea with a source carries its
+  criteria, two to four build checks and a final review; any other Add
+  task with criteria is `invalid`.
+- `tasks` gains `imaginarium_entry_id` and `imaginarium_catalog_version`
+  (migration `AddImaginariumSourceToTasks`), set together or not at all.
+- `task.created` version 2 is the shape of every task's creation (DB-56):
+  `imaginarium_entry` is the entry id or `null`, and
+  `added_criterion_ids` lists an idea's criteria or is empty. Version 1,
+  with neither field, stays for the logs that hold it. The replay
+  rebuilds `tasks.imaginarium_entry_id` and the idea's criteria from it,
+  and the step tracker reads the idea's criteria from it.
+- `delete_content` is refused `invalid_state` for the workspace's
+  Imaginarium project: the `content_deletability` guards name it (DB-55).
+
+## What the account menu added
+
+The sidebar account row of FR-001 shows the owner's sign-in email, which
+the app does not keep after a relaunch. Its decision is the one entry
+under [Account menu](decisions.md#account-menu).
+
+- The registry and `openapi.json` gain the owner read
+  `get_owner_identity` (`GET /v1/owner/session`, caller `owner`, command
+  `read`, tag `owner`, security `ownerSession`). It returns
+  `OwnerSessionIdentity`, the signed-in owner's `email_address` and the
+  log position `as_of_seq`, with `Cache-Control: no-store`. It is final,
+  like `get_workspace_settings`, not `x-provisional`.
+- It adds no command, event, state table row or Needs you item.

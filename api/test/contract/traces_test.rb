@@ -665,7 +665,7 @@ class TracesTest < Minitest::Test
       all_events(trace).each do |event|
         where = "#{name} #{event["ref"]} #{event["type"]}"
         entry = Leverage::Contract.event_type(event["type"])
-        assert_includes entry["schema_versions"], event["schema_version"], where
+        assert_equal entry["schema_versions"].max, event["schema_version"], "#{where}: the server writes the newest version"
         assert_includes entry["subject_kinds"], event["subject_kind"], where
         assert_equal event["subject_kind"].nil?, event["subject_id"].nil?, where
         assert_equal event["task_id"].nil?, event["round"].nil?, "#{where}: round is null exactly when task_id is"

@@ -24,6 +24,9 @@ You may not hand tasks in, so you are not offered tasks. A task you held when th
 <% if may_create? -%>
 You may create tasks with `create_task`.
 <% end -%>
+<% if turned_off? -%>
+The owner has turned this agent off: you are offered no new work, you may not add tasks, and a job result you send is refused `forbidden`. Keep polling.
+<% end -%>
 The owner can change these at any time. If a call answers `forbidden` or `not_eligible` and you think it should not, read `GET /v1/join` again.
 
 ## Keep polling

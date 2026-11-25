@@ -3,12 +3,17 @@ module Leverage
     module Entries
       # The seat's Add task starts in Backlog, then completes its contract
       # through the same gate as the owner and the planner (UX-11).
+      #
+      # Refused forbidden, before its body is read, for a seat without
+      # Create tasks and for a seat the owner has turned off (UX-13c): Off
+      # stops a seat from starting work as it stops its claims. A paused
+      # seat may still add a task.
       class CreateTask < AddTask
         def load(ctx)
           @seat = Seat.find_by(workspace_id: ctx.workspace.id, id: ctx.request.caller_id, removed_at: nil)
           raise NotFound, "No such seat" unless @seat
 
-          return unless Permissions.creates?(@seat)
+          return unless creator?
 
           @work = AgentTasks.held_work(@seat, at: ctx.at)
           body = ctx.request.params
@@ -25,7 +30,7 @@ module Leverage
         end
 
         def refusals(ctx)
-          return [ "forbidden" ] unless Permissions.creates?(@seat)
+          return [ "forbidden" ] unless creator?
 
           reason = AgentTasks.limit(@seat, @work, at: ctx.at)
           return [ Refusal.new(code: "add_task_limit", reason: reason) ] if reason
@@ -41,6 +46,10 @@ module Leverage
 
           @result = { "task_id" => id, "state" => Task.find(id).state }
         end
+
+        private
+
+        def creator? = @seat.enabled && Permissions.creates?(@seat)
       end
     end
   end

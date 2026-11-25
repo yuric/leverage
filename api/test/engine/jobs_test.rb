@@ -299,6 +299,33 @@ class JobQueueTest < ActiveSupport::TestCase
     assert_equal other, J.next_for(general)
   end
 
+  test "a seat that drafted a contract cannot take its ready check after its role changes" do
+    drafter = scenario.seat(role: "general")
+    task = scenario.task
+    scenario.job(kind: "contract_draft", task: task, state: "finished", seat: drafter)
+    drafter.update!(role: "orchestrator")
+    own, = general_job("rule_check", task)
+    assert_nil J.next_for(drafter)
+    assert_equal own, J.next_for(@orchestrator)
+  end
+
+  %w[general orchestrator].each do |role|
+    test "a #{role} seat cannot take the ready check of a task it added but can take another check" do
+      creator = scenario.seat(role: role)
+      rule = model_rule
+      assert_equal :pending, seat_command(creator, "add_task", contract_body.slice("title", "details", "criteria")).outcome
+      created = Event.find_by!(workspace_id: scenario.workspace_id, type: "task.created", actor_id: creator.id)
+      own = Job.find_by!(kind: "rule_check", task_id: created.task_id, state: "queued")
+
+      assert_nil J.next_for(creator)
+      assert_equal own, J.next_for(@orchestrator)
+      refute J.may_claim_proposal?(own, creator, at: scenario.database_now)
+      assert J.may_claim_proposal?(own, @orchestrator, at: scenario.database_now)
+      _task, _pending, check = waiting_contract(rule)
+      assert_equal job_of(check), J.next_for(creator)
+    end
+  end
+
   %i[task review provisional].each do |work|
     test "a General seat holding a #{work} cannot claim a job" do
       general = scenario.seat(role: "general")

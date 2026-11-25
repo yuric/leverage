@@ -176,6 +176,20 @@ class QuestionsApprovalsHttpTest < ActionDispatch::IntegrationTest
     refute earlier.key?(:detail), "a resolved item picked up the later decision's reason"
   end
 
+  test "a seat turned off cannot approve the action whose approval job it holds" do
+    approval_rule
+    task_id, = action_in_review
+    pass_review(start_review(task_id))
+    job = claim_job("approval")
+    completed("change_seat", @owner, ids: { "id" => @orchestrator.id }, body: { "enabled" => false })
+
+    refused("submit_job_result", token(@orchestrator), "forbidden", ids: { "id" => job },
+      body: { "result" => APPROVAL, "tokens" => 10, "spend" => 0 })
+    assert_equal "claimed", Job.find(job).state
+    page = task_page(task_id)
+    assert_equal [ "finishing", "requested" ], [ page.dig("task", "state"), page.fetch("actions").sole.fetch("state") ]
+  end
+
   test "an orchestrator decision surfaces until read and a read after submit is refused" do
     task_id, question_id = ask_blocking_question
     answer = "Use the second sample."

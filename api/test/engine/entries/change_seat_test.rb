@@ -322,6 +322,7 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_equal [ "refused", "invalid_state", true ], [ receipt.reload.outcome, receipt.refusal.fetch("code"), receipt.notify ]
     assert_equal [ true, false, true, true, true ], @builder.reload.attributes.values_at("may_work", "may_deliver", "may_create", "enabled", "wanted_running")
     assert_empty HelperRequest.where(seat_id: @builder.id)
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
   end
 
   test "Deliver off cancels a provisional claim and releases its reservation without a task release event" do
@@ -340,6 +341,7 @@ class ChangeSeatTest < ActiveSupport::TestCase
     repeated, events = change(@builder, permissions: permissions)
     assert_completed(repeated)
     assert_empty events
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
   end
 
   test "Deliver off leaves the builder's current and waiting approved outward actions assigned" do
@@ -356,6 +358,7 @@ class ChangeSeatTest < ActiveSupport::TestCase
     assert_equal [ "finishing", @builder.id, @builder.id ], active.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
     assert_equal [ "finishing", @builder.id, nil ], waiting.reload.attributes.values_at("state", "builder_seat_id", "holder_seat_id")
     assert_equal approval, actions.pluck(:id, :state, :approved_by_kind, :approved_by_id)
+    assert_empty Leverage::Replay.diff(scenario.workspace_id)
   end
 
   test "turning off a seat with a Working task: seat.changed, task.released seat_disabled caused by it, stop_seat" do

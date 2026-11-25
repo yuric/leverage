@@ -8,9 +8,11 @@ module Leverage
   # entry changes, so the order in which an
   # entry updates its rows and emits its events does not matter, and a
   # replay of the log can drive it the same way. Which criteria a task has
-  # as of an event is read from the log too (task.contract_changed's added
-  # and removed ids): an edit (milestone 3 plan HE-25) removes criteria, so
-  # the rows as they are later are not the ones an earlier event saw.
+  # as of an event is read from the log too (the added ids of task.created,
+  # which lists an Imaginarium idea's criteria, and the added and removed
+  # ids of task.contract_changed): an edit (milestone 3 plan HE-25) removes
+  # criteria, so the rows as they are later are not the ones an earlier
+  # event saw.
   #
   # The rules it keeps:
   #
@@ -89,6 +91,8 @@ module Leverage
     TERMINAL = %w[task.done task.cancelled].freeze
     HOLD_EVENTS = %w[hold.opened hold.closed].freeze
     CRITERIA_EVENTS = %w[task.contract_changed criterion.passed criterion.reopened].freeze
+    # The events that say which criteria a task has (criteria_as_of).
+    CONTRACT_EVENTS = %w[task.created task.contract_changed].freeze
 
     # The events the fold uses to derive work steps.
     HANDLED = %w[
@@ -524,12 +528,17 @@ module Leverage
         .order(:position).pick(:id)
     end
 
-    # The ids of the task's criteria as of an event: added by a
-    # task.contract_changed up to it and not removed since. A criterion's
-    # kind never changes (ContractDiff keeps an id by position and kind).
+    # The ids of the task's criteria as of an event: added by its
+    # task.created (an Imaginarium idea's, FR-039) or by a
+    # task.contract_changed up to it, and not removed since. Complete
+    # contract keeps or resets an idea's criteria and lists none of them as
+    # added, so task.created is the only event that names them. A
+    # criterion's kind never changes (ContractDiff keeps an id by position
+    # and kind).
     def criteria_as_of(event)
-      Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: "task.contract_changed")
+      Event.where(workspace_id: event.workspace_id, task_id: event.task_id, type: CONTRACT_EVENTS)
         .where("seq <= ?", event.seq).order(:seq).pluck(:payload).each_with_object(Set.new) do |payload, ids|
+          payload ||= {}
           ids.merge(Array(payload["added_criterion_ids"]))
           ids.subtract(Array(payload["removed_criterion_ids"]))
         end

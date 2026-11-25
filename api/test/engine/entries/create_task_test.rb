@@ -18,11 +18,29 @@ class CreateTaskTest < ActiveSupport::TestCase
     end
     assert_equal %w[task.created task.contract_changed task.ready], events.map(&:type)
     assert events.all? { |event| event.actor_kind == "seat" && event.actor_id == @seat.id }
+    created = events.first
+    assert_equal Leverage::Contract.event_type("task.created").fetch("schema_versions").max, created.schema_version
+    assert_equal({ "state" => "backlog", "added_action_ids" => [], "imaginarium_entry" => nil, "added_criterion_ids" => [] },
+      created.payload)
   end
 
   test "Create off refuses the command without creating a task" do
     @seat.update!(may_create: false)
     assert_no_difference("Task.count") { assert_refused "forbidden", seat_command(@seat, "add_task", @body) }
+  end
+
+  test "a seat turned off cannot create a task, whatever its body, and a paused seat still can" do
+    project = scenario.project
+    scenario.review(scenario.task(state: "in_review"), reviewer: @seat)
+    assert_completed(owner_command("change_seat", { "id" => @seat.id, "enabled" => false }))
+    assert_no_difference("Task.count") do
+      assert_refused "forbidden", seat_command(@seat, "add_task", @body)
+      assert_refused "forbidden", seat_command(@seat, "add_task", @body.merge("project_id" => project.id))
+    end
+
+    assert_completed(owner_command("change_seat", { "id" => @seat.id, "enabled" => true }))
+    assert_completed(owner_command("pause_seat", { "id" => @seat.id }))
+    assert_difference("Task.count", 1) { assert_completed(seat_command(@seat, "add_task", @body)) }
   end
 
   test "a removed seat cannot create a task at the transition boundary" do
@@ -42,8 +60,57 @@ class CreateTaskTest < ActiveSupport::TestCase
     item = open_items(task).sole
     assert_equal [ "agent_task_incomplete", { "seat_id" => @seat.id } ], [ item.kind, item.facts ]
     assert_completed(owner_command("disable_rule", { "id" => rule.id }))
-    assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id)))
+    events = events_written { assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id))) }
     assert_equal "resolved", item.reload.state
+    assert_equal "ready", task.reload.state
+    resolved = events.select { |event| event.type == "inbox.resolved" }.sole
+    assert_equal [ item.id, "owner", { "choice" => "complete_contract" } ],
+      [ resolved.subject_id, resolved.actor_kind, resolved.payload ]
+  end
+
+  test "a planner's draft the owner asked for resolves the item with the owner's choice" do
+    rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count",
+      parameters: { "minimum_count" => 4 })
+    task = Task.find(assert_completed(seat_command(@seat, "add_task", @body)).result.fetch("task_id"))
+    item = open_items(task).sole
+    planner = scenario.planner
+    assert_completed(owner_command("draft_contract", { "id" => task.id }))
+    assert_equal "open", item.reload.state
+    assert_completed(owner_command("disable_rule", { "id" => rule.id }))
+    job = Job.find(assert_completed(claim_job(planner)).result.fetch("job_id"))
+    events = events_written { assert_completed(submit_result(planner, job, contract_body)) }
+
+    assert_equal "ready", task.reload.state
+    resolved = events.select { |event| event.type == "inbox.resolved" }.sole
+    assert_equal [ item.id, "seat", planner.id, { "choice" => "draft_contract" } ],
+      [ resolved.subject_id, resolved.actor_kind, resolved.actor_id, resolved.payload ]
+  end
+
+  test "an owner's own task that failed its check has no item, and its completion writes no choice" do
+    rule = scenario.rule(hook: "task.before_ready", checker: "app", checker_function: "minimum_criteria_count",
+      parameters: { "minimum_count" => 4 })
+    task = scenario.task(state: "backlog", criteria: [])
+    assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id)))
+    assert_equal [ "contract_incomplete" ], open_holds(task).map(&:reason)
+    assert_empty open_items(task)
+    assert_completed(owner_command("disable_rule", { "id" => rule.id }))
+    events = events_written { assert_completed(owner_command("complete_contract", contract_body.merge("id" => task.id))) }
+    assert_includes events.map(&:type), "hold.closed"
+    assert_empty events.select { |event| event.type == "inbox.resolved" }
+  end
+
+  test "the seat that added a task is not given its ready check, which another orchestrator answers" do
+    creator = scenario.seat(role: "general")
+    orchestrator = online_orchestrator
+    model_rule
+    assert_equal :pending, seat_command(creator, "add_task", @body).outcome
+    task = Task.find(Event.find_by!(type: "task.created", actor_id: creator.id).task_id)
+    assert_equal "backlog", task.state
+
+    assert_refused "not_eligible", claim_job(creator)
+    assert_equal "none", Leverage::Reads::NextItem.call(creator).fetch("kind")
+    job = answer_next(orchestrator, PASSED)
+    assert_equal [ task.id, orchestrator.id ], [ job.task_id, job.reload.claimed_by_seat_id ]
     assert_equal "ready", task.reload.state
   end
 

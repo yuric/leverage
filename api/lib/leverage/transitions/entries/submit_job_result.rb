@@ -13,17 +13,20 @@ module Leverage
       # that transition is gated again (CheckReentry.after, with the
       # trigger check_finished). A contract draft's result is the Complete
       # contract command, run as the planner with this call's key
-      # (Transitions.run_as, RE-6), from the result's title, details,
-      # criteria and actions and the task's stored work reference, minimum
-      # strength rank and budget cap, whatever the result says of those
-      # three (RD-37, L539). A null or blank draft keeps the stored details.
+      # (Transitions.run_as, RE-6), from the result's title, details and
+      # criteria and the task's stored outward actions, work reference,
+      # minimum strength rank and budget cap, whatever the result says of
+      # those four (RD-37, L539). A null or blank draft keeps the stored
+      # details.
       # When that Complete contract waits on a model check, this call is the
       # one waiting: pending? answers true.
       #
       # Refused, and nothing is written (RD-41), in precedence order:
       # task_cancelled for the job of a task cancelled while the seat held
       # the job; not_holder from a seat that did not claim the job;
-      # forbidden from a seat of a role that does not claim its kind;
+      # forbidden from a seat of a role that does not claim its kind, or
+      # from a seat the owner has turned off (a paused seat finishes the
+      # job it holds; the refused job is left to its run timeout);
       # invalid_state for a job that is not claimed (timed out, withdrawn or
       # finished), whose run time has passed (L399: a result after its
       # timeout is discarded), or a draft whose task has left Backlog.
@@ -61,7 +64,7 @@ module Leverage
           held = @job.claimed_by_seat_id == @seat.id
           codes << "task_cancelled" if held && @task&.state == "cancelled"
           codes << "not_holder" unless held
-          codes << "forbidden" unless Jobs.role_matches?(@job, @seat)
+          codes << "forbidden" unless @seat.enabled && Jobs.role_matches?(@job, @seat)
           if @task&.content_deleted_at || @job.state != "claimed" || Jobs.due?(@job, :run, ctx.at)
             codes << Refusal.new(code: "invalid_state")
           end

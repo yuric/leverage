@@ -1613,7 +1613,7 @@
       "post": {
         "operationId": "claim_next_job",
         "summary": "Claims the next job: a rule check, a question, an approval or a contract draft.",
-        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A General seat claims every kind, and only while it holds no task, review or provisional claim and no approved action waits for it; it is not given a check at task.before_ready of a task whose contract it drafted (GA-3, GA-5). A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
+        "description": "The planner claims contract drafts; the orchestrator claims rule checks, questions and approvals. A General seat claims every kind, and only while it holds no task, review or provisional claim and no approved action waits for it; it is not given a check at task.before_ready of a task whose contract it drafted (GA-3, GA-5). No seat is given a check at task.before_ready of a task it added with create_task (UX-13a). A seat holds one job at a time: a seat that already holds a job gets that job again, so a run moved to another credential continues it (milestone 4 plan RD-35, RD-40). Jobs are given out oldest first. Replaying a key writes nothing and only returns material while the seat still holds the job in the current role and project. Otherwise it is refused with not_eligible.",
         "tags": [
           "agent"
         ],
@@ -1678,7 +1678,7 @@
       "post": {
         "operationId": "submit_job_result",
         "summary": "Returns the result in the fixed shape for the job's kind, with the tokens and spend it used.",
-        "description": "Each accepted result also writes `cost.reported` with the job as subject. A contract draft's result is the Complete contract command. A result after the job's timeout is discarded. It is refused with invalid_state, and writes nothing, after the job's timeout or for a withdrawn job; with task_cancelled for a cancelled task's job; with not_holder from a seat that does not hold the job (milestone 4 plan RD-41).",
+        "description": "Each accepted result also writes `cost.reported` with the job as subject. A contract draft's result is the Complete contract command. A result after the job's timeout is discarded. It is refused with invalid_state, and writes nothing, after the job's timeout or for a withdrawn job; with task_cancelled for a cancelled task's job; with not_holder from a seat that does not hold the job (milestone 4 plan RD-41); with forbidden from a seat the owner has turned off, whose job is left to its run timeout (a paused seat's result is accepted).",
         "tags": [
           "agent"
         ],
@@ -1762,7 +1762,7 @@
       "post": {
         "operationId": "create_task",
         "summary": "Adds a task to the Backlog and completes its contract, as the Add task form does.",
-        "description": "For a seat whose permissions include Create tasks (caller `creator`; otherwise `forbidden`). Runs Add task, then Complete contract with the seat as caller, so `task.created`, `task.contract_changed` and `task.ready` name the seat as actor and `task.before_ready` runs unchanged (UX-11). Answers AgentTaskCreated with `ready` or `backlog` once the check answers; a model check answers 202 pending, and `GET /v1/commands/{key}` then answers the same result. A refusal in the first answer means nothing was created. After a 202 the task already exists. A later `task_cancelled` means the owner ended it, while `invalid_state` can mean the owner edited its contract. Leave the existing task with the owner after either refusal. Refused `add_task_limit` at 20 tasks added by the seat in a rolling hour, when the seat's origin task was itself added by a seat, or at 50 open tasks agents added in the workspace (UX-14). 422 `invalid` for a project the seat may not name (UX-11c).",
+        "description": "For an enabled seat whose permissions include Create tasks (caller `creator`; otherwise `forbidden`, also for a seat the owner has turned off, UX-13c; a paused seat may call it). Runs Add task, then Complete contract with the seat as caller, so `task.created`, `task.contract_changed` and `task.ready` name the seat as actor and `task.before_ready` runs unchanged (UX-11). Answers AgentTaskCreated with `ready` or `backlog` once the check answers; a model check answers 202 pending, and `GET /v1/commands/{key}` then answers the same result. A refusal in the first answer means nothing was created. After a 202 the task already exists. A later `task_cancelled` means the owner ended it, while `invalid_state` can mean the owner edited its contract. Leave the existing task with the owner after either refusal. Refused `add_task_limit` at 20 tasks added by the seat in a rolling hour, when the seat's origin task was itself added by a seat, or at 50 open tasks agents added in the workspace (UX-14). 422 `invalid` for a project the seat may not name (UX-11c).",
         "tags": [
           "agent"
         ],
@@ -9784,8 +9784,8 @@
           "spend": {
             "type": "number",
             "minimum": 0,
-            "maximum": 99999999.999999,
-            "description": "US dollars since the last report."
+            "maximum": 100000,
+            "description": "US dollars since the last report. One report carries at most 100000; a total holds at most 99999999.999999."
           }
         },
         "required": [
@@ -9882,7 +9882,8 @@
           "spend": {
             "type": "number",
             "minimum": 0,
-            "maximum": 99999999.999999
+            "maximum": 100000,
+            "description": "US dollars. One report carries at most 100000; a total holds at most 99999999.999999."
           }
         },
         "required": [
@@ -10113,7 +10114,7 @@
       "DraftMaterial": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Everything a planner needs, built when the job is claimed (milestone 4 plan RD-30, RD-37): the task's text, the criteria it already has, which the planner keeps, and the three stored values the result sends back unchanged; the server keeps the stored ones whatever the result holds.",
+        "description": "Everything a planner needs, built when the job is claimed (milestone 4 plan RD-30, RD-37): the task's text, the criteria it already has, which the planner keeps, and the three stored values the result sends back unchanged; the server keeps the stored ones, and the task's outward actions, whatever the result holds.",
         "properties": {
           "role_file": {
             "type": [
@@ -10815,7 +10816,7 @@
       },
       "ContractDraftJobResult": {
         "$ref": "#/components/schemas/CompleteContractRequest",
-        "description": "A contract draft's result is the Complete contract command. Null or blank details preserve the task's stored details."
+        "description": "A contract draft's result is the Complete contract command. Null or blank details preserve the task's stored details. The server takes the title, the details and the criteria from it, and keeps the task's stored outward actions, work reference, minimum strength rank and budget cap whatever the result holds."
       },
       "JobResultRequest": {
         "type": "object",
@@ -10846,8 +10847,8 @@
           "spend": {
             "type": "number",
             "minimum": 0,
-            "maximum": 99999999.999999,
-            "description": "US dollars."
+            "maximum": 100000,
+            "description": "US dollars. One report carries at most 100000; a total holds at most 99999999.999999."
           }
         },
         "required": [

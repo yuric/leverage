@@ -429,6 +429,54 @@ Where two inventories chose differently, the decision names the conflict.
   which the audit checks as its own command. The audit cannot tell that
   sign-up from a new one that left the project out, so that a
   `create_owner` written now writes both is held by its own tests.
+- **DB-55** `[reading]` The content of the workspace's Imaginarium project
+  is not deletable: `delete_content` for that project is refused
+  `invalid_state` (the guard `content_not_deletable`), whatever the states
+  of its tasks. The gallery places every task in that project (FR-030),
+  the workspace knows it by its id (DB-53), and
+  `install_imaginarium_project` makes one only for a workspace that has
+  none, so deleting it left Send to Ready and Save to Ideas refused for
+  good. A Done or Cancelled task in it is deletable on its own, as in any
+  project. A workspace whose project lost its content before this still
+  gets "The Imaginarium project is unavailable." from Add task; nothing
+  repairs it. This takes the proposal of the gallery's open question
+  "Renaming or deleting the project" in `docs/imaginarium/PRD.md`, which
+  is still the owner's to answer. Alternative: allow the deletion and
+  create a fresh Imaginarium project when the recorded one has no
+  content.
+- **DB-56** `[shape]` `task.created` has one current shape, version 2,
+  written for every task, as the README's Versioning rule asks: the
+  server writes the newest version, and a field that may be absent in
+  fact is required and null. `imaginarium_entry` is the catalog entry id
+  of a task from the gallery, from the registry's `imaginarium_entries`,
+  or `null` for any other task (FR-041). `added_criterion_ids` lists the
+  criteria saved with an Imaginarium idea, in contract order, and is
+  empty for any other task (FR-039). The gallery first added version 2 as
+  a second live shape, written for gallery tasks only while every other
+  task was written as version 1, through a version a caller of
+  `EventLog.append` could name. No caller names a version now:
+  `EventLog.append` writes the newest registered one. Version 2 changed
+  in place (`null` joined the entry's values), which DB-48's reasoning
+  allows before the first release; every version 2 event already written
+  is valid in the new shape. Version 1 stays registered, unchanged, for
+  reading: a log written before this holds version 1 events with neither
+  field, and the replay and the step tracker read that as no entry and no
+  criteria. Every golden trace's `task.created` moved to version 2 with
+  `"imaginarium_entry": null` and `"added_criterion_ids": []`.
+  Alternatives: fold both fields into version 1 in place and drop
+  version 2, DB-50's way, which leaves the version 2 events already
+  stored with an unregistered version; or keep two live shapes, which
+  changes the versioning rule and is the owner's to decide.
+- **DB-57** `[reading]` One spend report, a cost report, a verdict or a
+  job result, carries at most 100,000 US dollars (`422 invalid` above),
+  in the server (`Costs::MAX_REPORT_SPEND`) and in the interface schema.
+  A task's or a project's total still holds at most 99,999,999.999999
+  (`numeric(14,6)`, DB-1), and a report that would overflow it is still
+  `422 invalid`. Spend is self-reported and nothing lowers a total, so a
+  report at the total's own ceiling filled the project's totals in one
+  call, and every later report with a spend above zero in that project
+  was refused. Alternatives: a lower ceiling, or one set in workspace
+  settings; or a total that saturates instead of refusing.
 
 ## State machine (SM)
 
@@ -1010,6 +1058,8 @@ on, which the owner may reverse later; it is listed there too.
     This reading also applies with the provider rule off. Escalation does not lift it: the guard `escalates` reads the
     bar as it is (GA-1). Alternatives: let it build what it reviewed, and
     let it check its own draft.
+    UX-13a extends the check bar to the seat that added the task, and
+    makes the draft bar hold whatever the seat's role is now.
   - `[owner-later]` No provider bar beyond the provider rule's own: a task
     given back (a release, a stop, a quit app, a lease expiry) may be
     built by another General seat, also one of another provider group.
@@ -1398,11 +1448,15 @@ task. PRD places are named by their section.
   with the seat as actor, only when a value changes. Values are checked as
   in UX-7 against the seat's provider; `null` means "cannot tell" and
   stores `""` (a null model needs a null effort). Not a claim
-  precondition; an agent that switches model reports again. The answer is
+  precondition; an agent that switches model reports again, also while
+  it waits on a pending transition: `change_seat` is
+  `allowed_while_pending`, which only the seat's own report reads, since
+  the owner is never held back (PRD Pending transitions). The answer is
   `ReportedModel`. `JoinInstructions` gains `models` (the provider's ids
   and efforts, `CatalogModel`) for a seat that connects on its own.
   Alternative: report on `GET /v1/join` (a read that writes), or refuse
-  claims until reported.
+  claims until reported; or answer `pending` to a report until the check
+  ends.
 - **UX-10** `[shape]` `seats.may_work`, `may_deliver` and `may_create`,
   `boolean NOT NULL DEFAULT true`. The migration `AddPermissionsToSeats`
   turns all three on for every existing seat and clears `model` and
@@ -1432,7 +1486,8 @@ task. PRD places are named by their section.
   seat is counted, offered and leased as a task's builder only with Work
   and Deliver both on. Action leases read neither permission. Turning
   Deliver off first cancels a provisional Ready claim or pending Working
-  submit with `invalid_state`. It then releases the Working task with the
+  submit with `invalid_state` (conditional events under the guard
+  `turns_deliver_off_with_pending_transition`). It then releases the Working task with the
   app's new release reason `deliver_turned_off` (conditional event under the guard
   `turns_deliver_off_holding_working_task`), as disabling does; `task.released`
   v1's enum gains it in place (no build has been released, DB-48's
@@ -1440,6 +1495,16 @@ task. PRD places are named by their section.
 - **UX-11b** `[reading]` The agent's call takes no outward actions, state,
   minimum strength or budget cap. Alternative: allow actions (the
   approval rule would then approve what the adding agent wrote).
+- **UX-11d** `[reading]` A planner's draft takes no outward actions
+  either: the result's `actions` are ignored and Complete contract runs
+  with the task's stored ones, as it does with the stored work reference,
+  minimum strength and budget cap. A draft writes the title, the details
+  and the criteria. The reasoning is UX-11b's: the approval rule approves
+  a publish or a send that "the contract names", so an action a planner
+  wrote would be approved on the planner's own words, with no owner step.
+  The schema `ContractDraftJobResult` keeps its shape. Alternative: let a
+  draft set actions, as the Planner row "the contract of the task its job
+  names" could be read.
 - **UX-11c** `[reading]` While the seat holds a task, a review or a job,
   the new task goes into that work's project; any other project is 422
   `invalid`. A seat that holds nothing may name any project or none.
@@ -1453,6 +1518,35 @@ task. PRD places are named by their section.
   `complete_contract`'s is `owner`, `planner` and `creator`, the creator
   only in the call that adds the task. Alternative: let the adding seat
   retry its own Backlog task.
+- **UX-13a** `[reading]` The seat that added a task (its `task.created`
+  actor) is not given that task's rule-check jobs at `task.before_ready`,
+  whatever its role, as GA-5 says of the seat that drafted the contract:
+  it wrote the whole contract the check reads. The bar is on the task, so
+  it stays when the owner completes the contract after a failed check.
+  GA-5's draft bar no longer reads the seat's role now, so a seat whose
+  role changed after its draft is barred too. With no other seat to take
+  the check it ends in error, and "Orchestrator offline" opens, as for a
+  lone General seat's own draft; a lone seat of the orchestrator role
+  keeps the role online, so the check misses twice and its error opens
+  the task's own item instead. Alternatives: let the adding seat check
+  its own task; or bar it only from the check of the Complete contract it
+  sent itself, so that it may check a contract the owner completes later.
+- **UX-13b** `[reading]` A seat the owner has turned off (`enabled`
+  false) is refused `forbidden` when it sends the result of a job it
+  holds: turning it off already releases its Working task and stops
+  showing it the job (`Jobs.next_for`), and a seat that connects on its
+  own keeps its token and its process. The job is left to its run
+  timeout, as before. A paused seat's result is accepted: a pause stops
+  new claims only. Alternatives: accept the result until the run
+  timeout; or withdraw and requeue the job when its seat is turned off.
+- **UX-13c** `[reading]` A seat the owner has turned off is refused
+  `forbidden` by `create_task`, before its body is read, and its join
+  instructions leave the call out and say the agent is off: Off stops a
+  seat from starting work, and a seat that connects on its own keeps its
+  token. A paused seat may still add a task: a pause stops claims and
+  leaves held work going, and a follow-up task belongs to that work.
+  Alternatives: Create tasks independent of Off; or refuse a paused seat
+  too.
 - **UX-14** `[reading]` One new refusal, `add_task_limit` (agent calls,
   precedence 14, after `duplicate_name`; its `reason` names the limit):
   20 tasks added per seat in any rolling hour; no task from a task a seat
@@ -1474,23 +1568,51 @@ task. PRD places are named by their section.
   app; it closes with that hold. Its choices are `complete_contract`,
   `draft_contract` and `cancel` (two new `inbox_choices`).
   `inbox.opened` and `inbox.resolved` v1 gain the new values in place.
-  Alternative: only the Backlog card and the task page show it.
+  `inbox.resolved` carries `complete_contract` when the owner's Complete
+  contract closes the hold, and `draft_contract` when a planner's draft
+  does: only the owner's Draft contract queues that job, so the draft
+  carries out the owner's choice, as a sign-in request's result resolves
+  with `sign_in_again` (HE-29). The owner's Edit contract resolves it with
+  null, and Cancel with `cancel`.
+  Alternative: only the Backlog card and the task page show it; or null
+  for a planner's draft, which leaves `draft_contract` never written.
 
 ## Imaginarium gallery
 
-- **Gallery source (FR-030, FR-041).** The existing owner `add_task`
-  operation accepts the catalog entry id and version. The workspace's
-  recorded project determines where the task goes. The two source columns
-  are written together. `task.created` v2 records the entry id from the
-  closed catalog vocabulary and the ids of any criteria saved with an
-  idea. Ordinary task creation uses v1. Replay accepts both, and rebuilds
-  the entry id and the idea criteria's state. The catalog version and
-  prompt text live on the task.
-- **Gallery ideas (FR-039).** Add task into Ideas writes the supplied build
-  checks and the final independent review using `ContractDiff`. Completing
-  the contract after promotion reads those criteria through the existing
-  task page. Send to Ready adds in Backlog and submits the separate
-  Complete contract command through the normal rule checks (FR-038).
+The gallery's other decisions are DB-53 (the project), DB-55 (its content
+is not deletable) and DB-56 (the shape of `task.created`).
+
+- **Gallery source (FR-030, FR-041).** `[shape]` The existing owner
+  `add_task` operation accepts the catalog entry id and version. The
+  workspace's recorded project determines where the task goes. The two
+  source columns are written together. `task.created` records the entry
+  id from the closed catalog vocabulary and the ids of any criteria saved
+  with an idea, in the one shape every task's `task.created` has (DB-56).
+  Replay rebuilds the entry id and the idea criteria's state, and reads a
+  version 1 event, which has neither field, as a task with no entry and
+  no criteria. The catalog version and prompt text live on the task.
+- **Gallery ideas (FR-039).** `[reading]` Add task into Ideas writes the
+  supplied build checks and the final independent review using
+  `ContractDiff`. Completing the contract after promotion reads those
+  criteria through the existing task page, and keeps or resets them by
+  position and kind, so `task.contract_changed` names none of them as
+  added: the step tracker reads a task's criteria from `task.created` as
+  well. Send to Ready adds in Backlog and submits the separate Complete
+  contract command through the normal rule checks (FR-038).
+
+## Account menu
+
+- **Owner identity read (FR-001).** `[shape]` The account row shows the
+  owner's sign-in email, and after a relaunch the app holds only the
+  session token. The contract answers with a read on the session's own
+  path, `GET /v1/owner/session` (`get_owner_identity`), returning
+  `OwnerSessionIdentity` (`email_address`, `as_of_seq`) with
+  `Cache-Control: no-store`, rather than keeping the email on the Mac.
+  The read is final, not `x-provisional`: it has two fields and its only
+  reader is the account row. The id a service issues (FR-022) belongs to
+  the subscription service of FR-024 and is not part of this read.
+  Alternative: store the email in the app at sign-in; or mark the read
+  provisional until the subscription work settles the row.
 
 ## Coverage index
 

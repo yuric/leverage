@@ -10,14 +10,15 @@ module Leverage
 
       Call = Data.define(:id, :method, :path)
 
-      Page = Data.define(:role, :seat_name, :address, :operations, :calls, :lease_seconds, :mcp_command, :permissions, :models) do
+      Page = Data.define(:role, :seat_name, :address, :operations, :calls, :lease_seconds, :mcp_command, :permissions, :models, :enabled) do
         def article = role == "orchestrator" ? "an" : "a"
         def builds? = Roles.acts_as?(role, "builder")
         def reviews? = Roles.acts_as?(role, "reviewer")
         def works_on_jobs? = Roles.acts_as?(role, "orchestrator") || Roles.acts_as?(role, "planner")
         def may_work? = permissions.fetch("work")
         def may_deliver? = permissions.fetch("deliver")
-        def may_create? = permissions.fetch("create")
+        def may_create? = operations.include?("create_task")
+        def turned_off? = !enabled
         def role_file? = Roles.role_file?(role)
         def job_rules = Roles.job_rules(role)
         def work_rules(acting_as) = Roles.work_rules(role, acting_as) || []
@@ -44,7 +45,8 @@ module Leverage
         seat_name = seat.name.gsub(LEVERAGE_TOKEN_IN_TEXT, "[FILTERED]") if connection == "http"
         page = Page.new(role: role, seat_name: seat_name, address: address, operations: operations,
           calls: (http_calls(operations) if connection == "http"), lease_seconds: lease_seconds(seat),
-          mcp_command: (mcp_command if connection == "mcp"), permissions: permissions, models: models)
+          mcp_command: (mcp_command if connection == "mcp"), permissions: permissions, models: models,
+          enabled: seat.enabled)
         source = Rails.root.join("config", template).read
         text = ERB.new(source, trim_mode: "-").result(page.get_binding)
         { role: role, connection: connection, permissions: permissions, models: models, text: "#{text.strip}\n" }
@@ -53,9 +55,13 @@ module Leverage
       def allowed_operations(seat)
         Roles::DEFINITIONS.fetch(seat.role).fetch("operations").select do |operation|
           case operation
-          when "claim_next_task", "submit_task" then Permissions.builds?(seat)
+          when "claim_next_task" then Permissions.builds?(seat)
+          # Submit reads Deliver alone, as the server does: with Work off
+          # the seat still hands in the task it holds (UX-11a).
+          when "submit_task" then seat.may_deliver
           when "claim_next_review", "claim_next_job" then Permissions.works?(seat)
-          when "create_task" then Permissions.creates?(seat)
+          # A seat the owner has turned off is refused the call (UX-13c).
+          when "create_task" then seat.enabled && Permissions.creates?(seat)
           when "report_model" then seat.credential_id.nil?
           else true
           end

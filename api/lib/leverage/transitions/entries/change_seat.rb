@@ -34,7 +34,8 @@ module Leverage
       #   after seat.changed and before task.released; a reviewer's pending
       #   pass is cancelled when its run is reported stopped (SeatRuns), not
       #   by the change; a job the seat holds as a checker or a planner is
-      #   left to its run timeout.
+      #   left to its run timeout, and a result the seat sends for it while
+      #   it is off is refused forbidden (submit_job_result).
       # - permissions: the whole set is applied together. Turning Deliver
       #   off releases the Working task and ends any provisional claim or
       #   pending submit, while the seat keeps its approved actions (UX-11a).

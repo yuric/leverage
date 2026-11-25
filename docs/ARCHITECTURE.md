@@ -459,6 +459,9 @@ adds the MCP server.
   `reads/inbox.rb`, `reads/recovery_times.rb`, `reads/rules.rb`,
   `reads/rule_timing.rb` and `reads/task_timeline.rb`), `Leverage::Replay`
   and `Leverage::LogAudit` (run by `bin/rails leverage:verify_log`;
+  `Leverage::StepRepair` rebuilds from the log the steps a migration or a
+  restore finds stored before the step tracker read `task.created`'s
+  criteria;
   `bin/rails leverage:recovery_times` prints every recovery time and
   `bin/rails leverage:rule_timing` each rule's runs and times), and
   milestone 1's `Leverage::Contract` and `Leverage::Gating`.

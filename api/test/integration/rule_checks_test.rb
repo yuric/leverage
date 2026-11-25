@@ -121,7 +121,7 @@ class RuleChecksHttpTest < ActionDispatch::IntegrationTest
 
   # --- RD-37 -------------------------------------------------------------------
 
-  test "RD-37: a planner's draft that names another work reference, rank and cap leaves the task's own" do
+  test "RD-37: a planner's draft that names other actions, work reference, rank and cap leaves the task's own" do
     @scenario = Scenario.new
     @scenario.with_shipped_rules
     assert_equal 7, turn_shipped_rules_off(owner).size
@@ -130,10 +130,16 @@ class RuleChecksHttpTest < ActionDispatch::IntegrationTest
     task = @scenario.task(state: "backlog")
     task.update_columns(work_reference: "~/work/the-site", minimum_strength_rank: nil, budget_cap: nil)
 
-    other = CONTRACT.merge("work_reference" => "~/somewhere/else", "minimum_strength_rank" => 3, "budget_cap" => 99.5)
+    kept = Action.create!(workspace_id: task.workspace_id, task_id: task.id, position: 1, kind: "send",
+      description: "Send the made-up price list.")
+
+    other = CONTRACT.merge("work_reference" => "~/somewhere/else", "minimum_strength_rank" => 3, "budget_cap" => 99.5,
+      "actions" => [ { "kind" => "publish", "description" => "Publish to the made-up blog." } ])
     done = draft_through(planner, other, task: task)
     assert_equal "completed", done.fetch(:answer).fetch("outcome")
     task.reload
+    assert_equal [ [ kept.id, "send", "Send the made-up price list." ] ],
+      Action.where(task_id: task.id).order(:position).pluck(:id, :kind, :description)
     assert_equal [ "ready", "~/work/the-site", nil, nil ],
       [ task.state, task.work_reference, task.minimum_strength_rank, task.budget_cap ]
     assert_equal CONTRACT.fetch("details"), task.details
