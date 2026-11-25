@@ -17,6 +17,14 @@ once it makes its first release.
   Subscription menu entry stays disabled.
 - The sidebar account row shows the owner's sign-in email and opens a
   menu with Settings and Sign out.
+- The Age of Lever page and the README say that Codex, Grok, Claude and
+  Gemini belong to their respective owners and that Leverage is not
+  affiliated with or endorsed by them.
+- [docs/DEPLOY.md](docs/DEPLOY.md#the-first-run) and the README tell a
+  person to read the providers' terms before adding a login, since a
+  provider may not allow its tool to be driven by another app or work to
+  move between two logins, and link the
+  [provider terms record](docs/research/provider-terms/README.md).
 
 - Every workspace has an Imaginarium project for gallery tasks. A new
   installation gets it at setup, and an
@@ -108,7 +116,8 @@ once it makes its first release.
   default model at the time. On the current cases Codex and Antigravity
   pass, and Claude Code has not been run. The server's request log now
   keeps no text but ids. The PRD gains the changes S-1 to S-14; the
-  choices are recorded in ADRs 0011 to 0013. After an adversarial review of the milestone: a waiting submit
+  choices are recorded in ADRs 0011 to 0013. After an adversarial review
+  of the milestone: a waiting submit
   or pass completes when its rule is turned off, removed or saved; the
   re-run limit holds across a release; a check that cannot run while the
   orchestrator is online always opens its item, at once, beside another
@@ -230,6 +239,16 @@ once it makes its first release.
 
 ### Changed
 
+- The Age of Lever page and the README say that Leverage is built to keep
+  work moving at a limit or a sign-out and that this has been shown so far
+  only with stand-in tools, with a link to
+  [how far it is proven](docs/IMPLEMENTATION.md#what-the-handoff-milestone-proves-and-how-far).
+  The page's Handoff example is labelled Illustration.
+- The API depends on the seven parts of Rails it uses (`railties`,
+  `activesupport`, `activemodel`, `activerecord`, `activejob`, `actionpack`
+  and `actionview`) instead of the `rails` gem. Its image no longer
+  installs Action Mailer, Action Mailbox, Action Text, Active Storage,
+  Action Cable or the gems only they need.
 - The README describes how Leverage coordinates AI agents on the Mac and
   keeps tasks moving through provider interruptions.
 - The left pane's Rules tab holds rules and workspace settings. Leverage
