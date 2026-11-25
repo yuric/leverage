@@ -277,7 +277,9 @@ How the backup and the restore are built is
 - **Where.** For the app, `<support folder>/backups`, which the app makes
   with mode 0700 and names in `LEVERAGE_BACKUP_DIR` in its server folder's
   `.env`. For a server started from the repository, the folder in
-  `LEVERAGE_BACKUP_DIR` (`./backups` in `.env.example`, git-ignored).
+  `LEVERAGE_BACKUP_DIR` (`./backups` in `.env.example`, git-ignored). A
+  dump (`*.dump`, `*.dump.partial`) is git-ignored by its name wherever
+  in the checkout it is written.
 - **How many.** The newest `BACKUP_KEEP` (14) dumps that `backup_runs`
   names are kept; older ones are deleted with their row. A file in the
   folder that no `backup_runs` row names is never deleted, so a dump
