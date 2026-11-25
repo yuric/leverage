@@ -11,11 +11,19 @@ class CreateTaskCallsTest < ActionDispatch::IntegrationTest
     @body = contract_body.slice("title", "details", "criteria")
   end
 
+  test "malformed JSON is refused before creating anything" do
+    assert_no_difference("Task.count") do
+      post "/v1/tasks", params: "{", headers: @headers.merge("Content-Type" => "application/json")
+      assert_response :bad_request
+    end
+  end
+
   test "the agent endpoint rejects owner-only fields before creating anything" do
     %w[actions state minimum_strength_rank budget_cap].each do |field|
       assert_no_difference("Task.count") do
         post "/v1/tasks", params: @body.merge(field => []), headers: @headers, as: :json
-        assert_response :bad_request
+        assert_response 422
+        assert_equal "invalid", response.parsed_body.dig("error", "code")
       end
     end
   end

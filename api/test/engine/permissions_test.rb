@@ -29,6 +29,30 @@ class PermissionsTest < ActiveSupport::TestCase
     refute Leverage::RolePresence.online?(@scenario.workspace, "orchestrator", Time.current)
   end
 
+  test "a waiting review opens No reviewer is eligible when the last reviewer cannot work" do
+    @scenario.rule(key: "different_provider_review", origin: "shipped")
+    task = @scenario.task(state: "in_review")
+    Leverage::ReviewerEligibility.reevaluate(@scenario.context)
+    refute InboxItem.exists?(about_id: task.id, kind: "no_reviewer_eligible")
+    @seat.update!(may_work: false)
+    Leverage::ReviewerEligibility.reevaluate(@scenario.context)
+    assert InboxItem.exists?(about_id: task.id, kind: "no_reviewer_eligible", state: "open")
+  end
+
+  test "a stronger seat without Deliver does not trigger escalation" do
+    rule = @scenario.rule(key: "escalate_after_failed_reviews", origin: "shipped", parameters: { "threshold" => 1 })
+    task = @scenario.task(state: "in_review", builder: @seat)
+    review = Review.find_by!(task_id: task.id)
+    stronger = @scenario.seat(strength_rank: 2, may_deliver: false)
+    request = Leverage::Gating::Request.new(subject_id: review.id, subject_kind: "review", workspace_id: task.workspace_id,
+      hook: "review.failed", task_id: task.id, project_id: task.project_id, round: task.round, inputs: {},
+      requester_kind: "seat", requester_id: @seat.id, command_key: "escalation")
+    check = -> { Leverage::Rules::Checkers::EscalateAfterFailedReviews.call(version: @scenario.current_version(rule), request: request, task: task) }
+    assert_nil check.call.effect
+    stronger.update!(may_deliver: true)
+    assert_equal "escalated", check.call.effect
+  end
+
   test "a holder with Work off still heartbeats and delivers, but cannot submit with Deliver off" do
     task = ready_to_submit(@seat)
     @seat.update!(may_work: false, may_deliver: false)
@@ -46,6 +70,25 @@ class PermissionsTest < ActiveSupport::TestCase
       body = pass_params(review).merge("verdict" => "failed", "failed_criteria" => [ Criterion.find_by!(task_id: task.id, kind: "build").id ])
       assert command("fail_review", reviewer, body).completed?
       assert_equal [ "ready", nil ], task.reload.attributes.values_at("state", "holder_seat_id")
+    end
+
+    %w[approve_action offer_task_again mark_action_done].each do |operation|
+      test "#{operation} leases approved actions to their builder with #{permission} off" do
+        @seat.update!(permission => false)
+        states = operation == "approve_action" ? %w[requested] : %w[approved approved]
+        task = @scenario.finishing_task(builder: @seat, holder: false, actions: states.map { |state| { kind: "send", state: state } })
+        actions = Action.where(task_id: task.id).order(:position)
+        if operation == "approve_action"
+          Leverage::Holds.open(@scenario.context, task: task, reason: "owner_approval", action_id: actions.first.id,
+            facts: { action_id: actions.first.id })
+        else
+          @scenario.hold(task, reason: "action_unconfirmed", facts: { action_ids: actions.ids,
+            approved_by_kind: "owner", approved_by_id: @scenario.owner.id, builder_announced_start: false })
+        end
+        target = operation == "offer_task_again" ? task : actions.first
+        assert command(operation, @scenario.owner, { "id" => target.id }).completed?
+        assert_equal @seat.id, task.reload.holder_seat_id
+      end
     end
 
     test "an action lease is granted with #{permission} off and returning it for rework goes to Ready" do
@@ -71,6 +114,11 @@ class PermissionsTest < ActiveSupport::TestCase
     ready = @scenario.task(state: "ready")
     @seat.update!(may_work: false)
     assert_nil Leverage::Candidates.wait_cause(ready, Time.current)
+    stronger.update!(may_deliver: true)
+    assert_equal "credential_limit", Leverage::Candidates.wait_cause(ready, Time.current)
+    credential.update!(state: "signed_out")
+    assert_equal [ credential.id, nil ], Leverage::Reads::Board::AccountWaits.new(@scenario.workspace_id, [ ready ]).for(ready)
+    stronger.update!(may_deliver: false)
     assert_nil Leverage::Reads::Board::AccountWaits.new(@scenario.workspace_id, [ ready ]).for(ready)
   end
 end

@@ -90,7 +90,7 @@ module Leverage
 
     # A stored claim can show its material only to the seat that can still hold it.
     def claim_material_available?(job, seat, at:)
-      return false unless active?(seat) && job.workspace_id == seat.workspace_id && job.claimed_by_seat_id == seat.id &&
+      return false unless active?(seat, new_claim: false) && job.workspace_id == seat.workspace_id && job.claimed_by_seat_id == seat.id &&
         job.state == "claimed" && role_matches?(job, seat) && !due?(job, :run, at)
 
       task = task_of(job)
@@ -183,8 +183,9 @@ module Leverage
 
     # L545 for a job's seat: enabled, not paused, not removed, of a role
     # that claims a job kind.
-    def active?(seat)
-      !seat.nil? && seat.enabled && !seat.paused && seat.removed_at.nil? && kinds_for(seat.role).any?
+    def active?(seat, new_claim: true)
+      seat&.enabled && !seat.paused && seat.removed_at.nil? && kinds_for(seat.role).any? &&
+        (!new_claim || Permissions.works?(seat))
     end
 
     # HD-4: a seat that connects on its own always; a seat the app runs

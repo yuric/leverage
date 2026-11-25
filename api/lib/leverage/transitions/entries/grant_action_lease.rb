@@ -15,7 +15,7 @@ module Leverage
 
           @action = Actions.first_approved_open(@task)
           ready = @action && Actions.approvals_complete?(@task) && @task.holder_seat_id.nil? &&
-            !Eligibility.on_hold?(@task) && Finishing.builder_free?(@task, at: ctx.at)
+            !Eligibility.on_hold?(@task) && Finishing.builder_free?(@task, lease: :action, at: ctx.at)
           ready ? [] : [ "invalid_state" ]
         end
 

@@ -121,7 +121,7 @@ module Leverage
 
     def enabled_seats(workspace, role)
       roles = role.to_s == ORCHESTRATOR ? Roles.roles_acting_as(ORCHESTRATOR) : role.to_s
-      Seat.where(workspace_id: workspace_id(workspace), role: roles, enabled: true, removed_at: nil)
+      Seat.where(workspace_id: workspace_id(workspace), role: roles, enabled: true, may_work: true, removed_at: nil)
     end
 
     def seat_online?(seat, at, waiting = nil)

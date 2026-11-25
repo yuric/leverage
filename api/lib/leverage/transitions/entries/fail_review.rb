@@ -141,7 +141,7 @@ module Leverage
           # (EN-14): its timer is written first, so builder_free reads it
           # ended whether or not the sweep has run.
           Timers.apply_held_by(ctx, @builder)
-          @free = Eligibility.builder_free?(@builder, @task, at: ctx.at)
+          @free = Eligibility.rework_free?(@builder, @task, at: ctx.at)
         end
 
         # HD-1, HE-14: the fresh lease is on the builder's first available

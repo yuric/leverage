@@ -40,12 +40,28 @@ class CreateTaskTest < ActiveSupport::TestCase
     assert_equal "ready", task.reload.state
   end
 
+  test "the idle creator may choose a project, but a holder whose work has none cannot" do
+    project = scenario.project
+    id = assert_completed(seat_command(@seat, "add_task", @body.merge("project_id" => project.id))).result.fetch("task_id")
+    assert_equal project.id, Task.find(id).project_id
+    scenario.review(scenario.task(state: "in_review"), reviewer: @seat)
+    assert_raises(T::Invalid) { seat_command(@seat, "add_task", @body.merge("project_id" => project.id)) }
+    id = assert_completed(seat_command(@seat, "add_task", @body)).result.fetch("task_id")
+    assert_nil Task.find(id).project_id
+  end
+
   test "a task added in a paused project is held" do
-    project = scenario.project(paused: true)
+    project = scenario.project
+    assert_completed(owner_command("pause_project", { "id" => project.id }))
     answer = assert_completed(seat_command(@seat, "add_task", @body.merge("project_id" => project.id)))
     task = Task.find(answer.result.fetch("task_id"))
     assert_equal project.id, task.project_id
     assert_includes open_holds(task).map(&:reason), "project_paused"
+
+    owner = assert_completed(owner_command("add_task", { "title" => "An owner's task", "project_id" => project.id }))
+    owner_task_id = owner.result.fetch("task_id")
+    creation = Event.find_by!(task_id: owner_task_id, type: "task.created")
+    assert TaskStep.exists?(task_id: owner_task_id, kind: "wait_contract", opening_event_id: creation.id)
   end
 
   %w[task review job].each do |kind|

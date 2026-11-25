@@ -10,6 +10,7 @@ module Leverage
         # Agent: the sixteen calls of plan §2.3.
         "get_next" => "v1/agent/next#show",
         "get_command" => "v1/agent/commands#show",
+        "create_task" => "v1/agent/tasks#create",
         "claim_next_task" => "v1/agent/tasks#claim_next",
         "get_task_briefing" => "v1/agent/tasks#briefing",
         "acknowledge_task_briefing" => "v1/agent/tasks#acknowledge_briefing",

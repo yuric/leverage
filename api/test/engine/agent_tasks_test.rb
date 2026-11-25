@@ -16,6 +16,9 @@ class AgentTasksTest < ActiveSupport::TestCase
     20.times { assert_completed(add) }
     answer = assert_refused("add_task_limit", add)
     assert_match(/20/, answer.refusal.reason)
+    first = Event.where(workspace_id: scenario.workspace_id, type: "task.created", actor_id: @seat.id).minimum(:at)
+    assert Leverage::AgentTasks.limit(@seat, nil, at: first + 1.hour - 1.second)
+    assert_nil Leverage::AgentTasks.limit(@seat, nil, at: first + 1.hour)
     assert_completed(add(scenario.seat))
   end
 

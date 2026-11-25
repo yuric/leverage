@@ -41,6 +41,7 @@ module Leverage
 
         def refusals(_ctx)
           codes = Eligibility.task_refusals(@task, @seat)
+          codes << "forbidden" unless @seat.may_deliver
           codes << state_refusal(@task.state)
           codes << "on_hold" if Eligibility.on_hold?(@task)
           codes << { missing: "briefing_not_acknowledged", changed: "briefing_changed" }[
